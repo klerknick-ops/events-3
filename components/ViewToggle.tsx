@@ -3,21 +3,25 @@
 import Link from "next/link";
 import clsx from "clsx";
 
-// Segmented control to switch between the Day Timeline and Month Calendar.
-// Both views read from the same event data — this just routes between them.
+// Segmented control to switch between Day timeline, Week timeline and Month
+// calendar. All three read from the same event data — this just routes.
 export function ViewToggle({
   active,
   date,
 }: {
-  active: "day" | "month";
+  active: "day" | "week" | "month";
   date?: string; // YYYY-MM-DD to carry across views
 }) {
-  const dayHref = date ? `/timeline?date=${date}` : "/timeline";
-  const monthHref = date ? `/calendar?date=${date}` : "/calendar";
+  const q = date ? `?date=${date}` : "";
   return (
     <div className="flex rounded-lg border border-base bg-surface p-0.5">
-      <Tab href={dayHref} label="Day" on={active === "day"} />
-      <Tab href={monthHref} label="Month" on={active === "month"} />
+      <Tab href={`/timeline${q}`} label="Day" on={active === "day"} />
+      <Tab
+        href={`/timeline?view=week${date ? `&date=${date}` : ""}`}
+        label="Week"
+        on={active === "week"}
+      />
+      <Tab href={`/calendar${q}`} label="Month" on={active === "month"} />
     </div>
   );
 }

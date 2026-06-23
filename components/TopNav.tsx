@@ -16,7 +16,6 @@ const LINKS: {
 }[] = [
   { href: "/", label: "Dashboard", exact: true },
   { href: "/timeline", label: "Timeline" },
-  { href: "/calendar", label: "Calendar" },
   { href: "/tasks", label: "Tasks" },
   { href: "/clients", label: "Clients" },
   { href: "/activity", label: "Activity", perm: "VIEW_GLOBAL_ACTIVITY" },

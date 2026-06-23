@@ -1,12 +1,18 @@
 import { Suspense } from "react";
 import { TimelineApp } from "@/components/timeline/TimelineApp";
+import { WeekTimeline } from "@/components/timeline/WeekTimeline";
 
 export const dynamic = "force-dynamic";
 
-export default function TimelinePage() {
+export default async function TimelinePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const { view } = await searchParams;
   return (
     <Suspense>
-      <TimelineApp />
+      {view === "week" ? <WeekTimeline /> : <TimelineApp />}
     </Suspense>
   );
 }
