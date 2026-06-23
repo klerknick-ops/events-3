@@ -1,0 +1,47 @@
+{
+  "name": "sir-events",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force",
+    "create:platform-admin": "tsx scripts/create-platform-admin.ts",
+    "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1073.0",
+    "@prisma/client": "^6.2.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "docx": "^9.1.0",
+    "next": "15.5.19",
+    "pdfkit": "^0.15.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pdfkit": "^0.13.9",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.15",
+    "prisma": "^6.2.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

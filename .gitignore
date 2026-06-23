@@ -1,0 +1,24 @@
+node_modules
+.next
+out
+build
+*.log
+.env*.local
+.DS_Store
+next-env.d.ts
+.tsbuildinfo
+*.tsbuildinfo
+
+# Local SQLite database (legacy; project now uses Postgres)
+prisma/dev.db
+prisma/dev.db-journal
+
+# Local dev object-storage fallback (production uses R2)
+.data/
+
+# Uploaded files (dev local storage)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Local env (use .env.example as the template; set real vars in Railway)
+.env

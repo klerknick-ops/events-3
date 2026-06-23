@@ -1,0 +1,38 @@
+# Optional CI deploy to Railway.
+#
+# Most teams just use Railway's native GitHub integration (connect the repo in
+# the Railway dashboard and it auto-deploys on push) — in that case you don't
+# need this file. Use this workflow if you prefer deploys to run from GitHub
+# Actions instead.
+#
+# Setup:
+#   1. Railway dashboard → Project → Settings → Tokens → create a token.
+#   2. GitHub repo → Settings → Secrets and variables → Actions:
+#        - secret  RAILWAY_TOKEN   = <the token>
+#        - variable RAILWAY_SERVICE = <your service name> (optional)
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+      - name: Deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -n "${{ vars.RAILWAY_SERVICE }}" ]; then
+            railway up --ci --service "${{ vars.RAILWAY_SERVICE }}"
+          else
+            railway up --ci
+          fi

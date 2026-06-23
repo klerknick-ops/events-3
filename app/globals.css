@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Semantic color tokens as space-separated RGB triplets (consumed by Tailwind
+   via rgb(var(--x) / <alpha-value>)). Light values on :root, dark on .dark. */
+:root {
+  --ink: 15 23 42; /* slate-900 */
+  --ink-soft: 51 65 85; /* slate-700 */
+  --ink-muted: 100 116 139; /* slate-500 */
+  --app: 248 250 252; /* slate-50 */
+  --surface: 255 255 255; /* white */
+  --surface-2: 241 245 249; /* slate-100 */
+  --border: 226 232 240; /* slate-200 */
+  --muted: 241 245 249; /* slate-100 */
+  --accent: 238 242 255; /* brand-50 */
+  color-scheme: light;
+}
+
+.dark {
+  --ink: 226 232 240; /* slate-200 */
+  --ink-soft: 203 213 225; /* slate-300 */
+  --ink-muted: 148 163 184; /* slate-400 */
+  --app: 8 11 22; /* near-black */
+  --surface: 17 24 39; /* slate-900 */
+  --surface-2: 30 41 59; /* slate-800 */
+  --border: 38 49 70; /* slate-800/700 blend */
+  --muted: 30 41 59; /* slate-800 */
+  --accent: 39 39 84; /* muted indigo for selection */
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-app text-ink antialiased;
+}
+
+/* Thin, unobtrusive scrollbars for the timeline + panels. */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-base;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+/* Slide-in panel animation */
+@keyframes panel-in {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.animate-panel-in {
+  animation: panel-in 0.18s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}

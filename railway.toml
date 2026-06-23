@@ -1,0 +1,21 @@
+# Railway configuration (config-as-code).
+#
+# Migrations run in `preDeployCommand`, which executes ONCE per deployment after
+# the build and before any replica starts serving — so they never race across
+# multiple instances. The per-replica `startCommand` only boots the server, so
+# it's safe to scale `numReplicas` up.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+preDeployCommand = "npx prisma migrate deploy"
+startCommand = "npm run start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Scale out safely — migrations already ran in preDeploy. Raise as needed
+# (or set replicas in the Railway dashboard).
+numReplicas = 1

@@ -1,0 +1,410 @@
+// Event planning platform — multi-tenant relational schema (PostgreSQL).
+//
+// Tenancy: every business-data row belongs to exactly one Organization
+// (tenant). Queries are always scoped by the signed-in user's organizationId
+// (see lib/tenant.ts). Platform admins (isPlatformAdmin) sit above all orgs and
+// provision them. Enum-like fields are String + TS unions (lib/enums.ts). Money
+// is Float, rounded centrally in lib/money.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Tenancy ----------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // stable identifier (future subdomains)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  companies     Company[]
+  contacts      Contact[]
+  spaces        BookableSpace[]
+  products      Product[]
+  roomTypes     HotelRoomType[]
+  taskTemplates TaskTemplate[]
+  templates     EventTemplate[]
+  events        Event[]
+  settings      Setting[]
+  activities    ActivityLog[]
+}
+
+// ---------- Users & auth ----------
+
+model User {
+  id              String        @id @default(cuid())
+  email           String        @unique
+  name            String
+  passwordHash    String
+  role            String        @default("STAFF") // ADMIN | MANAGER | STAFF
+  active          Boolean       @default(true)
+  isPlatformAdmin Boolean       @default(false) // provisions orgs; not org-scoped
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  sessions   Session[]
+  activities ActivityLog[]
+  notes      EventNote[]
+
+  @@index([organizationId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------- Clients ----------
+
+model Company {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  email          String?
+  phone          String?
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  contacts Contact[]
+
+  @@index([organizationId])
+}
+
+model Contact {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  notes          String?
+  companyId      String?
+  company        Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  events Event[]
+
+  @@index([organizationId])
+  @@index([companyId])
+}
+
+// ---------- Building blocks (Configuration) ----------
+
+model BookableSpace {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  capacity       Int?
+  color          String       @default("#6366f1")
+  sortOrder      Int          @default(0)
+  archived       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  timeSlots     EventTimeSlot[]
+  templateSlots TemplateSlot[]
+
+  @@index([organizationId])
+}
+
+model Product {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  imageUrl       String?
+  priceNet       Float        @default(0)
+  taxRate        Float        @default(0) // percentage, e.g. 21 for 21%
+  archived       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  eventProducts    EventProduct[]
+  templateProducts TemplateProduct[]
+
+  @@index([organizationId])
+}
+
+// Hotel room type — structurally similar to Product but kept distinct. Has an
+// inventory count (number of physical rooms of this type) for per-night
+// availability checks, and is booked by date range rather than a time slot.
+model HotelRoomType {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  imageUrl       String?
+  priceNet       Float        @default(0) // price per night, net
+  taxRate        Float        @default(0)
+  inventory      Int          @default(1) // total rooms of this type
+  archived       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  bookings EventRoomBooking[]
+
+  @@index([organizationId])
+}
+
+// Per-organization settings (cancellation policy, doc templates, …).
+model Setting {
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  key            String
+  value          String
+  updatedAt      DateTime     @updatedAt
+
+  @@id([organizationId, key])
+}
+
+// Reusable deadline rule, referenced by event templates.
+model TaskTemplate {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title           String
+  defaultAssignee String?
+  offsetDays      Int          @default(0)
+  basis           String       @default("BEFORE_EVENT") // BEFORE_EVENT | BEFORE_CREATION
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  templateTasks TemplateTask[]
+
+  @@index([organizationId])
+}
+
+model EventTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  archived       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  slots    TemplateSlot[]
+  products TemplateProduct[]
+  tasks    TemplateTask[]
+  events   Event[]
+
+  @@index([organizationId])
+}
+
+// Default time-slot structure for a template (suggested space + time + duration).
+model TemplateSlot {
+  id         String         @id @default(cuid())
+  templateId String
+  template   EventTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  spaceId    String?
+  space      BookableSpace? @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  label      String?
+  startTime  String         @default("12:00") // HH:mm on the event day
+  durationMin Int           @default(120)
+  dayOffset  Int            @default(0) // day relative to the event's first day
+  sortOrder  Int            @default(0)
+
+  @@index([templateId])
+}
+
+model TemplateProduct {
+  id         String        @id @default(cuid())
+  templateId String
+  template   EventTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity   Int           @default(1)
+
+  @@index([templateId])
+}
+
+model TemplateTask {
+  id             String        @id @default(cuid())
+  templateId     String
+  template       EventTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  taskTemplateId String
+  taskTemplate   TaskTemplate  @relation(fields: [taskTemplateId], references: [id], onDelete: Cascade)
+  sortOrder      Int           @default(0)
+
+  @@index([templateId])
+}
+
+// ---------- Events ----------
+
+model Event {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String
+  status         String         @default("INQUIRY") // INQUIRY | TENTATIVE | CONFIRMED | COMPLETED | CANCELLED
+  notes          String?
+  contactId      String
+  contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  templateId     String?
+  template       EventTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  days         EventDay[]
+  timeSlots    EventTimeSlot[]
+  products     EventProduct[]
+  roomBookings EventRoomBooking[]
+  tasks        Task[]
+  eventNotes   EventNote[]
+  activities   ActivityLog[]
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([status])
+}
+
+// A single calendar day within an event. Single-day events have exactly one
+// EventDay; multi-day events have several, each with independent slots/products.
+model EventDay {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  date      DateTime // local midnight of the day
+  label     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  timeSlots EventTimeSlot[]
+  products  EventProduct[]
+
+  @@index([eventId])
+}
+
+model EventTimeSlot {
+  id        String        @id @default(cuid())
+  eventId   String
+  event     Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  dayId     String?
+  day       EventDay?     @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  spaceId   String
+  space     BookableSpace @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  label     String?
+  startsAt  DateTime
+  endsAt    DateTime
+  sortOrder Int           @default(0)
+
+  products EventProduct[]
+
+  @@index([eventId])
+  @@index([dayId])
+  @@index([spaceId, startsAt])
+}
+
+// Event <-> Product join with quantity and per-line price/tax overrides.
+// Optionally scoped to a specific time slot.
+model EventProduct {
+  id                   String         @id @default(cuid())
+  eventId              String
+  event                Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  dayId                String?
+  day                  EventDay?      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  slotId               String?
+  slot                 EventTimeSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  productId            String
+  product              Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity             Int            @default(1)
+  unitPriceNetOverride Float?
+  taxRateOverride      Float?
+
+  @@index([eventId])
+  @@index([dayId])
+  @@index([slotId])
+}
+
+model Task {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title     String
+  assignee  String?
+  dueDate   DateTime?
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([dueDate])
+}
+
+// Hotel room booking on an event: a quantity of a room type over a date range
+// (check-in → check-out). Conflict checks compare nightly demand to inventory.
+model EventRoomBooking {
+  id         String        @id @default(cuid())
+  eventId    String
+  event      Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  roomTypeId String
+  roomType   HotelRoomType @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  quantity   Int           @default(1)
+  checkIn    DateTime
+  checkOut   DateTime
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([eventId])
+  @@index([roomTypeId, checkIn])
+}
+
+// ---------- Notes & activity ----------
+
+// Manually written, timestamped context notes (distinct from the activity log).
+model EventNote {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+}
+
+// System-generated record of meaningful changes (who / what / when).
+model ActivityLog {
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventId        String?
+  event          Event?        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action         String // e.g. EVENT_CREATED, STATUS_CHANGED, PRODUCT_ADDED
+  summary        String // human-readable description
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([eventId])
+  @@index([userId])
+  @@index([createdAt])
+}

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sir-events",
+      "runtimeExecutable": "/Users/nick/.local/node-v22.11.0-darwin-arm64/bin/node",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "port": 3000
+    }
+  ]
+}

@@ -1,0 +1,224 @@
+// Lightweight client-facing types mirroring API responses.
+import type { EventStatus, TaskDeadlineBasis } from "./enums";
+
+export interface Space {
+  id: string;
+  name: string;
+  capacity: number | null;
+  color: string;
+  sortOrder: number;
+  archived: boolean;
+}
+
+export interface Product {
+  id: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  priceNet: number;
+  taxRate: number;
+  archived: boolean;
+}
+
+export interface RoomType {
+  id: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  priceNet: number;
+  taxRate: number;
+  inventory: number;
+  archived: boolean;
+}
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  name: string;
+  role: "ADMIN" | "MANAGER" | "STAFF";
+  active: boolean;
+  createdAt: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  _count?: { contacts: number };
+}
+
+export interface Contact {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  companyId: string | null;
+  company?: Company | null;
+  _count?: { events: number };
+}
+
+export interface TaskTemplate {
+  id: string;
+  title: string;
+  defaultAssignee: string | null;
+  offsetDays: number;
+  basis: TaskDeadlineBasis;
+}
+
+export interface TemplateSlot {
+  id: string;
+  spaceId: string | null;
+  space?: Space | null;
+  label: string | null;
+  startTime: string;
+  durationMin: number;
+  dayOffset: number;
+  sortOrder: number;
+}
+
+export interface TemplateProduct {
+  id: string;
+  productId: string;
+  product: Product;
+  quantity: number;
+}
+
+export interface TemplateTask {
+  id: string;
+  taskTemplateId: string;
+  taskTemplate: TaskTemplate;
+  sortOrder: number;
+}
+
+export interface EventTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  archived: boolean;
+  slots?: TemplateSlot[];
+  products?: TemplateProduct[];
+  tasks?: TemplateTask[];
+  _count?: { slots: number; products: number; tasks: number };
+}
+
+export interface EventDay {
+  id: string;
+  eventId: string;
+  date: string;
+  label: string | null;
+  sortOrder: number;
+}
+
+export interface TimeSlot {
+  id: string;
+  eventId: string;
+  dayId: string | null;
+  spaceId: string;
+  space?: Space;
+  label: string | null;
+  startsAt: string;
+  endsAt: string;
+  sortOrder: number;
+}
+
+export interface EventProduct {
+  id: string;
+  productId: string;
+  product: Product;
+  dayId: string | null;
+  slotId: string | null;
+  slot?: TimeSlot | null;
+  quantity: number;
+  unitPriceNetOverride: number | null;
+  taxRateOverride: number | null;
+}
+
+export interface RoomBooking {
+  id: string;
+  eventId: string;
+  roomTypeId: string;
+  roomType: RoomType;
+  quantity: number;
+  checkIn: string;
+  checkOut: string;
+  notes: string | null;
+}
+
+export interface Task {
+  id: string;
+  eventId: string;
+  title: string;
+  assignee: string | null;
+  dueDate: string | null;
+  completed: boolean;
+  event?: {
+    id: string;
+    title: string;
+    status: EventStatus;
+    contact: {
+      firstName: string;
+      lastName: string;
+      company: { name: string } | null;
+    };
+  };
+}
+
+export interface EventNote {
+  id: string;
+  eventId: string;
+  authorId: string | null;
+  author?: { id: string; name: string } | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface ActivityEntry {
+  id: string;
+  eventId: string | null;
+  userId: string | null;
+  user?: { id: string; name: string } | null;
+  action: string;
+  summary: string;
+  createdAt: string;
+  event?: { id: string; title: string } | null;
+}
+
+export interface EventFull {
+  id: string;
+  title: string;
+  status: EventStatus;
+  notes: string | null;
+  contactId: string;
+  templateId: string | null;
+  contact: Contact;
+  template?: { id: string; name: string } | null;
+  days: EventDay[];
+  timeSlots: TimeSlot[];
+  products: EventProduct[];
+  roomBookings: RoomBooking[];
+  tasks: Task[];
+  createdAt: string;
+}
+
+export interface TimelineSlot {
+  id: string;
+  spaceId: string;
+  label: string | null;
+  startsAt: string;
+  endsAt: string;
+  space: Space;
+  event: {
+    id: string;
+    title: string;
+    status: EventStatus;
+    contact: {
+      firstName: string;
+      lastName: string;
+      company: { name: string } | null;
+    };
+  };
+}

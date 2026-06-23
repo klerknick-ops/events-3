@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//Users/nick/.nvm/**)",
+      "Read(//Users/nick/.nvm/versions/**)",
+      "Bash(zsh -lic 'which node; node -v; npm -v')",
+      "Bash(brew --version)",
+      "Bash(curl -sI --max-time 15 https://nodejs.org/dist/v22.11.0/node-v22.11.0-darwin-arm64.tar.gz)",
+      "Bash(echo \"EXIT:$?\")"
+    ]
+  }
+}
