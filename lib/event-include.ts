@@ -4,8 +4,12 @@ import type { Prisma } from "@prisma/client";
 export const fullEventInclude = {
   contact: { include: { company: true } },
   template: { select: { id: true, name: true } },
+  paymentTerms: true,
   days: { orderBy: { sortOrder: "asc" } },
-  timeSlots: { orderBy: { sortOrder: "asc" }, include: { space: true } },
+  timeSlots: {
+    orderBy: { sortOrder: "asc" },
+    include: { space: true, setup: true },
+  },
   products: {
     include: { product: true, slot: true },
     orderBy: { id: "asc" },

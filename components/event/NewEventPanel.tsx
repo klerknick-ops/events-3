@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/fetcher";
-import type { Contact, EventFull, EventTemplate } from "@/lib/types";
-import { Button, Card, Field, Input, Spinner } from "@/components/ui";
+import type { Contact, EventFull, EventTemplate, PaymentTerms } from "@/lib/types";
+import { Button, Card, Field, Input, Select, Spinner } from "@/components/ui";
 import { PanelHeader } from "@/components/SidePanel";
 import { ContactPicker } from "./ContactPicker";
 import { ymd } from "@/lib/dates";
@@ -83,11 +83,14 @@ function BuildStep({
   );
   const baseDateInit = prefill ? ymd(new Date(prefill.startsAt)) : defaultDate;
   const [baseDate, setBaseDate] = useState(baseDateInit);
+  const [paymentTermsList, setPaymentTermsList] = useState<PaymentTerms[]>([]);
+  const [paymentTermsId, setPaymentTermsId] = useState<string>("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.get<EventTemplate[]>("/api/templates").then(setTemplates);
+    api.get<PaymentTerms[]>("/api/payment-terms").then(setPaymentTermsList);
   }, []);
 
   async function create() {
@@ -107,6 +110,7 @@ function BuildStep({
         title: title.trim(),
         baseDate,
         templateId: path === "template" ? templateId : null,
+        paymentTermsId: paymentTermsId || null,
         prefill: path === "custom" ? prefill ?? null : null,
       });
       onCreated(event.id);
@@ -153,6 +157,19 @@ function BuildStep({
               value={baseDate}
               onChange={(e) => setBaseDate(e.target.value)}
             />
+          </Field>
+          <Field label="Payment terms">
+            <Select
+              value={paymentTermsId}
+              onChange={(e) => setPaymentTermsId(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {paymentTermsList.map((pt) => (
+                <option key={pt.id} value={pt.id}>
+                  {pt.name}
+                </option>
+              ))}
+            </Select>
           </Field>
         </div>
       </div>

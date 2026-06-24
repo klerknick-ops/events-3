@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
 import type { FunctionSheetData } from "./function-sheet";
-import type { DocBlock } from "./doc-template";
+import type { DocBlock, ImageMap } from "./doc-template";
 
 const BRAND = "#4f46e5";
 const INK = "#0f172a";
@@ -10,6 +10,7 @@ const MUTED = "#64748b";
 export function renderDocPdf(
   blocks: DocBlock[],
   data: FunctionSheetData,
+  images?: ImageMap,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 48 });
@@ -49,6 +50,21 @@ export function renderDocPdf(
         case "spacer":
           doc.moveDown(0.5);
           break;
+        case "image": {
+          const img = images?.get(block.src);
+          // pdfkit embeds PNG/JPEG only.
+          if (img && /^(png|jpg|jpeg)$/i.test(img.type)) {
+            ensureSpace(doc, 60);
+            doc.moveDown(0.3);
+            try {
+              doc.image(img.buffer, { fit: [contentWidth, 240], align: "center" });
+              doc.moveDown(0.5);
+            } catch {
+              /* ignore unrenderable image */
+            }
+          }
+          break;
+        }
         case "schedule":
           renderSchedule(doc, data);
           break;

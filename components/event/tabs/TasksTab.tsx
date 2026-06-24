@@ -13,19 +13,30 @@ export function TasksTab({
   event: EventFull;
   reload: () => void;
 }) {
+  const [adding, setAdding] = useState(false);
+
   return (
     <section>
       <SectionHeader
         title="Tasks"
         action={
-          <AddTaskButton
-            onAdd={async (title) => {
-              await api.post(`/api/events/${event.id}/tasks`, { title });
-              reload();
-            }}
-          />
+          !adding ? (
+            <Button size="sm" variant="subtle" onClick={() => setAdding(true)}>
+              + Add task
+            </Button>
+          ) : null
         }
       />
+      {adding ? (
+        <AddTaskForm
+          onCancel={() => setAdding(false)}
+          onAdd={async (input) => {
+            await api.post(`/api/events/${event.id}/tasks`, input);
+            setAdding(false);
+            reload();
+          }}
+        />
+      ) : null}
       {event.tasks.length === 0 ? (
         <Empty>No tasks. Add ad-hoc tasks or create from a template.</Empty>
       ) : (
@@ -77,44 +88,71 @@ export function TasksTab({
   );
 }
 
-function AddTaskButton({ onAdd }: { onAdd: (title: string) => void }) {
-  const [open, setOpen] = useState(false);
+// Manual task creation — a deadline is required (Phase 3, Section 4).
+function AddTaskForm({
+  onAdd,
+  onCancel,
+}: {
+  onAdd: (input: { title: string; dueDate: string; assignee: string | null }) => Promise<void>;
+  onCancel: () => void;
+}) {
   const [title, setTitle] = useState("");
-  if (!open)
-    return (
-      <Button size="sm" variant="subtle" onClick={() => setOpen(true)}>
-        + Add task
-      </Button>
-    );
+  const [dueDate, setDueDate] = useState("");
+  const [assignee, setAssignee] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!title.trim()) return setError("A task title is required");
+    if (!dueDate) return setError("A deadline is required");
+    setSaving(true);
+    setError(null);
+    try {
+      await onAdd({ title: title.trim(), dueDate, assignee: assignee.trim() || null });
+    } catch (e) {
+      setError((e as Error).message);
+      setSaving(false);
+    }
+  }
+
   return (
-    <div className="flex items-center gap-1">
+    <div className="mb-3 space-y-2 rounded-lg border border-base bg-surface-2 p-3">
       <input
         autoFocus
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Task title"
-        className="h-8 w-40 rounded border border-base bg-surface px-2 text-sm text-ink"
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && title.trim()) {
-            onAdd(title.trim());
-            setTitle("");
-            setOpen(false);
-          }
-          if (e.key === "Escape") setOpen(false);
-        }}
+        className="h-9 w-full rounded border border-base bg-surface px-2 text-sm text-ink"
       />
-      <button
-        className="text-sm text-brand-600"
-        onClick={() => {
-          if (title.trim()) {
-            onAdd(title.trim());
-            setTitle("");
-            setOpen(false);
-          }
-        }}
-      >
-        Add
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <label className="flex flex-col text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+          Deadline (required)
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className="mt-0.5 h-9 rounded border border-base bg-surface px-2 text-sm font-normal normal-case text-ink"
+          />
+        </label>
+        <label className="flex flex-1 flex-col text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+          Assignee (optional)
+          <input
+            value={assignee}
+            onChange={(e) => setAssignee(e.target.value)}
+            placeholder="e.g. Coordinator"
+            className="mt-0.5 h-9 rounded border border-base bg-surface px-2 text-sm font-normal normal-case text-ink"
+          />
+        </label>
+      </div>
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={submit} disabled={saving}>
+          {saving ? "Adding…" : "Add task"}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -64,6 +64,7 @@ const createSchema = z.object({
   contactId: z.string().min(1, "A contact is required"),
   title: z.string().min(1, "A title is required"),
   templateId: z.string().nullish(),
+  paymentTermsId: z.string().nullish(),
   baseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   notes: z.string().nullish(),
   prefill: prefillSchema.nullish(),
@@ -77,6 +78,15 @@ export const POST = route(async (req) => {
     where: { id: body.contactId, organizationId: orgId },
   });
   if (!contact) return badRequest("Contact not found");
+
+  // Validate payment terms belong to this org.
+  let paymentTermsId: string | null = null;
+  if (body.paymentTermsId) {
+    const pt = await prisma.paymentTerms.findFirst({
+      where: { id: body.paymentTermsId, organizationId: orgId },
+    });
+    paymentTermsId = pt?.id ?? null;
+  }
 
   const now = new Date();
   const baseDate = body.baseDate ? parseYmd(body.baseDate) : startOfDay(now);
@@ -154,6 +164,7 @@ export const POST = route(async (req) => {
       title: body.title,
       contactId: body.contactId,
       templateId: body.templateId || null,
+      paymentTermsId,
       notes: body.notes || null,
       timeSlots: { create: slotInputs },
       products: { create: productInputs },

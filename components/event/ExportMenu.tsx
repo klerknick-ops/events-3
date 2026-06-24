@@ -11,6 +11,8 @@ export function ExportMenu({ event }: { event: EventFull }) {
   const multiDay = event.days.length > 1;
   const fs = (q: string) => `/api/events/${event.id}/function-sheet?${q}`;
   const pr = (q: string) => `/api/events/${event.id}/proposal?${q}`;
+  const cf = (q: string) => `/api/events/${event.id}/confirmation?${q}`;
+  const pf = (q: string) => `/api/events/${event.id}/proforma?${q}`;
 
   return (
     <div className="relative">
@@ -45,6 +47,20 @@ export function ExportMenu({ event }: { event: EventFull }) {
               PDF
             </Item>
             <Item href={pr("format=docx")}>Word</Item>
+
+            <div className="my-1 border-t border-base" />
+            <Label>Confirmation</Label>
+            <Item href={cf("format=pdf")} blank>
+              PDF
+            </Item>
+            <Item href={cf("format=docx")}>Word</Item>
+
+            <div className="my-1 border-t border-base" />
+            <Label>Pro Forma Invoice</Label>
+            <Item href={pf("format=pdf")} blank>
+              PDF
+            </Item>
+            <Item href={pf("format=docx")}>Word</Item>
           </div>
         </>
       ) : null}

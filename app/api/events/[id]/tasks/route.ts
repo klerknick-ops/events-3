@@ -7,7 +7,8 @@ import { logActivity } from "@/lib/activity";
 const schema = z.object({
   title: z.string().min(1),
   assignee: z.string().nullish(),
-  dueDate: z.string().nullish(),
+  // Manual tasks must have a deadline (Phase 3, Section 4).
+  dueDate: z.string().min(1, "A deadline is required"),
 });
 
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {

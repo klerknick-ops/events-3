@@ -1,19 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/fetcher";
 import { TEMPLATE_VARIABLES } from "@/lib/doc-template";
 import { Button, Card, Spinner, Textarea } from "@/components/ui";
 import clsx from "clsx";
 
-type Kind = "function_sheet" | "proposal";
+type Kind = "function_sheet" | "proposal" | "confirmation" | "proforma";
+const KINDS: Kind[] = ["function_sheet", "proposal", "confirmation", "proforma"];
 const KEYS: Record<Kind, string> = {
   function_sheet: "template_function_sheet",
   proposal: "template_proposal",
+  confirmation: "template_confirmation",
+  proforma: "template_proforma",
 };
 const LABELS: Record<Kind, string> = {
   function_sheet: "Function Sheet",
   proposal: "Proposal",
+  confirmation: "Confirmation",
+  proforma: "Pro Forma",
 };
 
 export default function SheetTemplatesPage() {
@@ -23,19 +28,18 @@ export default function SheetTemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     (async () => {
-      // Fetch current settings + the built-in defaults (via a no-op render hint).
       const settings = await api.get<Record<string, string>>("/api/settings");
-      const def = await api.get<{ function_sheet: string; proposal: string }>(
-        "/api/doc-templates/defaults",
-      );
-      setDefaults({ function_sheet: def.function_sheet, proposal: def.proposal });
-      setValues({
-        function_sheet: settings[KEYS.function_sheet] ?? def.function_sheet,
-        proposal: settings[KEYS.proposal] ?? def.proposal,
-      });
+      const def = await api.get<Record<Kind, string>>("/api/doc-templates/defaults");
+      setDefaults(def);
+      const init: Record<string, string> = {};
+      for (const k of KINDS) init[k] = settings[KEYS[k]] ?? def[k];
+      setValues(init);
       setLoading(false);
     })();
   }, []);
@@ -47,6 +51,42 @@ export default function SheetTemplatesPage() {
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  // Insert text at the textarea cursor (used by image insertion).
+  function insertAtCursor(snippet: string) {
+    const ta = taRef.current;
+    const current = values[kind] ?? "";
+    if (!ta) {
+      setValues((v) => ({ ...v, [kind]: current + snippet }));
+      return;
+    }
+    const start = ta.selectionStart ?? current.length;
+    const end = ta.selectionEnd ?? current.length;
+    const next = current.slice(0, start) + snippet + current.slice(end);
+    setValues((v) => ({ ...v, [kind]: next }));
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + snippet.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  }
+
+  async function onImagePicked(file: File) {
+    setUploading(true);
+    try {
+      const res = await api.form<{ url: string }>("/api/uploads", (() => {
+        const fd = new FormData();
+        fd.set("file", file);
+        return fd;
+      })());
+      insertAtCursor(`\n{{image:${res.url}}}\n`);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   if (loading) {
@@ -62,11 +102,13 @@ export default function SheetTemplatesPage() {
       <p className="mb-4 text-sm text-ink-muted">
         Edit the layout & wording of generated documents using variables. Lines
         starting with <code className="rounded bg-muted px-1">#</code> are titles,{" "}
-        <code className="rounded bg-muted px-1">##</code> are section headings.
+        <code className="rounded bg-muted px-1">##</code> are section headings. Use
+        the <strong>Insert image</strong> button to drop a logo or photo into the
+        document.
       </p>
 
-      <div className="mb-4 flex gap-1 rounded-lg border border-base bg-surface p-0.5">
-        {(["function_sheet", "proposal"] as Kind[]).map((k) => (
+      <div className="mb-4 flex flex-wrap gap-1 rounded-lg border border-base bg-surface p-0.5">
+        {KINDS.map((k) => (
           <button
             key={k}
             onClick={() => setKind(k)}
@@ -82,7 +124,29 @@ export default function SheetTemplatesPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
+          <div className="mb-2 flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onImagePicked(f);
+              }}
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+            >
+              {uploading ? "Uploading…" : "🖼 Insert image"}
+            </Button>
+            <span className="text-xs text-ink-muted">PNG or JPEG, inserted at the cursor.</span>
+          </div>
           <Textarea
+            ref={taRef}
             rows={22}
             className="font-mono text-xs"
             value={values[kind] ?? ""}

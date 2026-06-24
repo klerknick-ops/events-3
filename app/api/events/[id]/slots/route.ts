@@ -4,6 +4,7 @@ import { badRequest, conflict, created, parseBody, route } from "@/lib/api";
 import { findSlotConflicts } from "@/lib/conflicts";
 import { requireOrg, getEventInOrg } from "@/lib/tenant";
 import { ensureEventDays } from "@/lib/event-days";
+import { computeSlotSetup } from "@/lib/slot-setup";
 import { logActivity } from "@/lib/activity";
 
 const schema = z.object({
@@ -11,6 +12,11 @@ const schema = z.object({
   label: z.string().nullish(),
   startsAt: z.string(),
   endsAt: z.string(),
+  personCount: z.coerce.number().int().min(0).optional(),
+  setupId: z.string().nullish(),
+  setupTableCount: z.coerce.number().int().min(0).nullish(),
+  setupHeadTables: z.boolean().optional(),
+  setupManual: z.boolean().optional(),
   force: z.boolean().optional(),
 });
 
@@ -42,6 +48,16 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
     }
   }
 
+  const personCount = body.personCount ?? 0;
+  const setupFields = await computeSlotSetup({
+    spaceId: body.spaceId,
+    personCount,
+    setupId: body.setupId ?? null,
+    manual: body.setupManual ?? false,
+    tableCount: body.setupTableCount ?? null,
+    headTables: body.setupHeadTables ?? false,
+  });
+
   const count = await prisma.eventTimeSlot.count({ where: { eventId: id } });
   const slot = await prisma.eventTimeSlot.create({
     data: {
@@ -51,6 +67,8 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
       startsAt,
       endsAt,
       sortOrder: count,
+      personCount,
+      ...setupFields,
     },
     include: { space: true },
   });

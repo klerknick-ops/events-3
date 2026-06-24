@@ -5,6 +5,7 @@ import { api } from "@/lib/fetcher";
 import type { Space } from "@/lib/types";
 import { Button, Card, EmptyState, Field, Input, Spinner } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { SetupManager } from "@/components/config/SetupManager";
 
 const PRESET_COLORS = [
   "#4f46e5", "#059669", "#d97706", "#0284c7", "#7c3aed",
@@ -16,6 +17,7 @@ export default function SpacesPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Space | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [setupsFor, setSetupsFor] = useState<Space | null>(null);
 
   async function load() {
     setLoading(true);
@@ -80,9 +82,12 @@ export default function SpacesPage() {
                   </div>
                 </div>
               </div>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={() => openEdit(s)}>
                   Edit
+                </Button>
+                <Button size="sm" variant="subtle" onClick={() => setSetupsFor(s)}>
+                  Setups
                 </Button>
                 <Button
                   size="sm"
@@ -113,6 +118,10 @@ export default function SpacesPage() {
             load();
           }}
         />
+      ) : null}
+
+      {setupsFor ? (
+        <SetupManager space={setupsFor} onClose={() => setSetupsFor(null)} />
       ) : null}
     </div>
   );

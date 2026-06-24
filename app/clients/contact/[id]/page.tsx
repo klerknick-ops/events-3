@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { EVENT_STATUS_LABELS, EVENT_STATUS_STYLES, type EventStatus } from "@/lib/enums";
+import { type EventStatus } from "@/lib/enums";
 import { computeEventTotals } from "@/lib/event-helpers";
 import { formatMoney } from "@/lib/money";
 import { formatDateTimeRange } from "@/lib/dates";
+import { ContactEventList, type EventRow } from "@/components/event/ContactEventList";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,23 @@ export default async function ContactHistoryPage({
   });
 
   if (!contact) notFound();
+
+  const eventRows: EventRow[] = contact.events.map((ev) => {
+    const { totals } = computeEventTotals(ev.products);
+    const first = ev.timeSlots[0];
+    return {
+      id: ev.id,
+      title: ev.title,
+      status: ev.status as EventStatus,
+      dateLabel: first
+        ? formatDateTimeRange(new Date(first.startsAt), new Date(first.endsAt))
+        : "No scheduled slots",
+      slots: ev.timeSlots.length,
+      products: ev.products.length,
+      tasks: ev._count.tasks,
+      totalLabel: formatMoney(totals.gross),
+    };
+  });
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
@@ -63,51 +81,12 @@ export default async function ContactHistoryPage({
         Event history ({contact.events.length})
       </h2>
 
-      {contact.events.length === 0 ? (
+      {eventRows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-base p-6 text-center text-sm text-ink-muted">
           No events for this client yet.
         </p>
       ) : (
-        <div className="space-y-3">
-          {contact.events.map((ev) => {
-            const { totals } = computeEventTotals(ev.products);
-            const status = ev.status as EventStatus;
-            const first = ev.timeSlots[0];
-            return (
-              <div
-                key={ev.id}
-                className="rounded-xl border border-base bg-surface p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-ink">{ev.title}</div>
-                    <div className="text-xs text-ink-muted">
-                      {first
-                        ? formatDateTimeRange(
-                            new Date(first.startsAt),
-                            new Date(first.endsAt),
-                          )
-                        : "No scheduled slots"}
-                    </div>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_STATUS_STYLES[status].pill}`}
-                  >
-                    {EVENT_STATUS_LABELS[status]}
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
-                  <span>🕑 {ev.timeSlots.length} slots</span>
-                  <span>🍽 {ev.products.length} products</span>
-                  <span>✓ {ev._count.tasks} tasks</span>
-                  <span className="font-medium text-ink">
-                    {formatMoney(totals.gross)} total
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <ContactEventList events={eventRows} />
       )}
     </div>
   );

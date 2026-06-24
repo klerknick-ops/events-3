@@ -65,6 +65,14 @@ export function ScheduleTab({
                   <div className="text-xs text-ink-muted">
                     {formatDateTimeRange(new Date(s.startsAt), new Date(s.endsAt))}
                   </div>
+                  <div className="text-xs text-ink-muted">
+                    {s.personCount} guest{s.personCount === 1 ? "" : "s"}
+                    {s.setup ? ` · ${s.setup.name}` : ""}
+                    {s.setupTableCount != null
+                      ? ` · ${s.setupTableCount} table${s.setupTableCount === 1 ? "" : "s"}`
+                      : ""}
+                    {s.setupHeadTables ? " + head" : ""}
+                  </div>
                 </div>
               </div>
               <div className="flex gap-1">

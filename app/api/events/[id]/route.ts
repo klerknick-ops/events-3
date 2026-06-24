@@ -25,6 +25,7 @@ const schema = z.object({
   status: z.enum(EVENT_STATUSES).optional(),
   notes: z.string().nullish(),
   contactId: z.string().optional(),
+  paymentTermsId: z.string().nullable().optional(),
 });
 
 export const PATCH = route(async (req: Request, ctx: Ctx) => {
@@ -46,6 +47,13 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
     });
     if (!c) return notFound("Contact not found");
   }
+  // Validate payment terms (null clears it).
+  if (body.paymentTermsId) {
+    const pt = await prisma.paymentTerms.findFirst({
+      where: { id: body.paymentTermsId, organizationId: orgId },
+    });
+    if (!pt) return notFound("Payment terms not found");
+  }
 
   const event = await prisma.event.update({
     where: { id },
@@ -54,6 +62,8 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
       status: body.status,
       notes: body.notes ?? undefined,
       contactId: body.contactId,
+      paymentTermsId:
+        body.paymentTermsId === undefined ? undefined : body.paymentTermsId,
     },
     include: fullEventInclude,
   });

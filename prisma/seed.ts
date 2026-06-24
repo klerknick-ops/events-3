@@ -45,20 +45,61 @@ async function seedOrganization(cfg: OrgSeed) {
     prisma.bookableSpace.create({ data: { organizationId: oid, name: "Meeting Room A", capacity: 40, color: "#0284c7", sortOrder: 4 } }),
   ]);
 
-  // Products
-  const mk = (title: string, description: string, priceNet: number, taxRate: number, imageUrl: string) =>
-    prisma.product.create({ data: { organizationId: oid, title, description, priceNet, taxRate, imageUrl } });
+  // Products (pricingMode: PER_PERSON for catering/guest items, PER_PIECE for gear/decor)
+  const mk = (title: string, description: string, priceNet: number, taxRate: number, pricingMode: string, imageUrl: string) =>
+    prisma.product.create({ data: { organizationId: oid, title, description, priceNet, taxRate, pricingMode, imageUrl } });
   const [welcomeDrinks, platedDinner, buffetLunch, winePairing, avPackage, coffeeBreak, floralCenterpiece, cakeService] =
     await Promise.all([
-      mk("Welcome Drinks Reception", "Sparkling wine & canapés on arrival, per guest.", 18, 21, "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=400&q=70"),
-      mk("Plated 3-Course Dinner", "Seasonal three-course plated dinner, per guest.", 68, 21, "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&q=70"),
-      mk("Buffet Lunch", "Hot & cold buffet lunch with dessert station, per guest.", 42, 21, "https://images.unsplash.com/photo-1555244162-803834f70033?w=400&q=70"),
-      mk("Wine Pairing", "Sommelier-selected wine pairing, per guest.", 35, 21, "https://images.unsplash.com/photo-1510626176961-4b57d4fbad03?w=400&q=70"),
-      mk("AV & PA Package", "Projector, screen, microphones and sound desk.", 450, 21, "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=400&q=70"),
-      mk("Coffee & Pastry Break", "Barista coffee, tea and pastries, per guest.", 12, 9, "https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=400&q=70"),
-      mk("Floral Centerpiece", "Seasonal floral centerpiece, per table.", 55, 9, "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400&q=70"),
-      mk("Cake Cutting & Service", "Cake plating and table service.", 120, 9, "https://images.unsplash.com/photo-1535141192574-5d4897c12636?w=400&q=70"),
+      mk("Welcome Drinks Reception", "Sparkling wine & canapés on arrival, per guest.", 18, 21, "PER_PERSON", "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=400&q=70"),
+      mk("Plated 3-Course Dinner", "Seasonal three-course plated dinner, per guest.", 68, 21, "PER_PERSON", "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&q=70"),
+      mk("Buffet Lunch", "Hot & cold buffet lunch with dessert station, per guest.", 42, 21, "PER_PERSON", "https://images.unsplash.com/photo-1555244162-803834f70033?w=400&q=70"),
+      mk("Wine Pairing", "Sommelier-selected wine pairing, per guest.", 35, 21, "PER_PERSON", "https://images.unsplash.com/photo-1510626176961-4b57d4fbad03?w=400&q=70"),
+      mk("AV & PA Package", "Projector, screen, microphones and sound desk.", 450, 21, "PER_PIECE", "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=400&q=70"),
+      mk("Coffee & Pastry Break", "Barista coffee, tea and pastries, per guest.", 12, 9, "PER_PERSON", "https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=400&q=70"),
+      mk("Floral Centerpiece", "Seasonal floral centerpiece, per table.", 55, 9, "PER_PIECE", "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400&q=70"),
+      mk("Cake Cutting & Service", "Cake plating and table service.", 120, 9, "PER_PIECE", "https://images.unsplash.com/photo-1535141192574-5d4897c12636?w=400&q=70"),
     ]);
+
+  // Setups (room layouts) per space, with threshold rules keyed off person count.
+  const banquet = await prisma.setup.create({
+    data: {
+      spaceId: ballroom.id,
+      name: "Banquet rounds",
+      sortOrder: 1,
+      rules: {
+        create: [
+          { minPersons: 1, tableCount: 1, sortOrder: 1, note: "Single round" },
+          { minPersons: 19, tableCount: 2, sortOrder: 2, note: "Split to 2 tables" },
+          { minPersons: 32, tableCount: 3, headTables: true, sortOrder: 3, note: "Add head/end tables" },
+        ],
+      },
+    },
+  });
+  const ballroomTheatre = await prisma.setup.create({ data: { spaceId: ballroom.id, name: "Theatre", sortOrder: 2 } });
+  const ceremonyRows = await prisma.setup.create({ data: { spaceId: terrace.id, name: "Ceremony rows", sortOrder: 1 } });
+  const boardroom = await prisma.setup.create({ data: { spaceId: privateDining.id, name: "Boardroom", sortOrder: 1 } });
+  await prisma.setup.create({ data: { spaceId: meetingA.id, name: "U-shape", sortOrder: 1 } });
+  await prisma.setup.create({ data: { spaceId: meetingA.id, name: "Theatre", sortOrder: 2 } });
+
+  // Payment terms presets
+  const fiftyFifty = await prisma.paymentTerms.create({
+    data: {
+      organizationId: oid,
+      name: "50% deposit / 50% on the day",
+      depositPercent: 50,
+      sortOrder: 1,
+      body: "A 50% deposit is due on booking to confirm the reservation. The remaining 50% balance is payable on the day of the event.",
+    },
+  });
+  await prisma.paymentTerms.create({
+    data: {
+      organizationId: oid,
+      name: "25% deposit / net 14 after event",
+      depositPercent: 25,
+      sortOrder: 2,
+      body: "A 25% deposit is due on booking. The remaining balance is invoiced after the event and payable within 14 days.",
+    },
+  });
 
   // Hotel rooms
   const [standardRoom, deluxeRoom, suite] = await Promise.all([
@@ -107,6 +148,12 @@ async function seedOrganization(cfg: OrgSeed) {
   const sarah = await prisma.contact.create({ data: { organizationId: oid, firstName: "Sarah", lastName: "Mitchell", email: "sarah.m@example.com" } });
   const james = await prisma.contact.create({ data: { organizationId: oid, firstName: "James", lastName: "Okafor", email: "j.okafor@acme.example", companyId: acme.id } });
 
+  // Attach products to a specific slot (Phase 3: products live under slots).
+  const attach = (eventId: string, slotId: string, items: { productId: string; quantity: number }[]) =>
+    prisma.eventProduct.createMany({
+      data: items.map((it) => ({ eventId, slotId, productId: it.productId, quantity: it.quantity })),
+    });
+
   // Events
   const wedding = await prisma.event.create({
     data: {
@@ -115,17 +162,24 @@ async function seedOrganization(cfg: OrgSeed) {
       status: "CONFIRMED",
       notes: "Outdoor ceremony; weather backup in ballroom.",
       contactId: sarah.id,
+      paymentTermsId: fiftyFifty.id,
       timeSlots: {
         create: [
-          { label: "Ceremony", spaceId: terrace.id, startsAt: at(0, 14, 0), endsAt: at(0, 15, 30), sortOrder: 1 },
-          { label: "Dinner & Reception", spaceId: ballroom.id, startsAt: at(0, 18, 0), endsAt: at(0, 23, 0), sortOrder: 2 },
+          { label: "Ceremony", spaceId: terrace.id, startsAt: at(0, 14, 0), endsAt: at(0, 15, 30), sortOrder: 1, personCount: 80, setupId: ceremonyRows.id },
+          { label: "Dinner & Reception", spaceId: ballroom.id, startsAt: at(0, 18, 0), endsAt: at(0, 23, 0), sortOrder: 2, personCount: 80, setupId: banquet.id, setupTableCount: 8, setupHeadTables: true },
         ],
       },
-      products: { create: [{ productId: welcomeDrinks.id, quantity: 80 }, { productId: platedDinner.id, quantity: 80 }, { productId: floralCenterpiece.id, quantity: 10 }] },
       roomBookings: { create: [{ roomTypeId: standardRoom.id, quantity: 8, checkIn: at(0, 15), checkOut: at(1, 11) }, { roomTypeId: suite.id, quantity: 1, checkIn: at(0, 15), checkOut: at(2, 11) }] },
       tasks: { create: [{ title: "Confirm final guest count", assignee: "Coordinator", dueDate: at(-2, 12), completed: true }, { title: "Technical / AV check", assignee: "Tech", dueDate: at(-1, 9) }] },
     },
+    include: { timeSlots: { orderBy: { sortOrder: "asc" } } },
   });
+  await attach(wedding.id, wedding.timeSlots[1].id, [
+    { productId: welcomeDrinks.id, quantity: 80 },
+    { productId: platedDinner.id, quantity: 80 },
+    { productId: floralCenterpiece.id, quantity: 8 },
+    { productId: cakeService.id, quantity: 1 },
+  ]);
   if (admin) {
     await prisma.eventNote.create({
       data: {
@@ -137,32 +191,44 @@ async function seedOrganization(cfg: OrgSeed) {
   }
 
   if (cfg.full) {
-    await prisma.event.create({
+    const lunch = await prisma.event.create({
       data: {
         organizationId: oid,
         title: "Acme Q3 Strategy Lunch",
         status: "TENTATIVE",
         contactId: james.id,
-        timeSlots: { create: [{ label: "Lunch", spaceId: privateDining.id, startsAt: at(0, 12, 0), endsAt: at(0, 14, 0), sortOrder: 1 }] },
-        products: { create: [{ productId: buffetLunch.id, quantity: 18 }, { productId: coffeeBreak.id, quantity: 18 }] },
+        paymentTermsId: fiftyFifty.id,
+        timeSlots: { create: [{ label: "Lunch", spaceId: privateDining.id, startsAt: at(0, 12, 0), endsAt: at(0, 14, 0), sortOrder: 1, personCount: 18, setupId: boardroom.id }] },
         tasks: { create: [{ title: "Confirm final guest count", assignee: "Coordinator", dueDate: at(-3, 12) }] },
       },
+      include: { timeSlots: true },
     });
-    await prisma.event.create({
+    await attach(lunch.id, lunch.timeSlots[0].id, [
+      { productId: buffetLunch.id, quantity: 18 },
+      { productId: coffeeBreak.id, quantity: 18 },
+    ]);
+
+    const conf = await prisma.event.create({
       data: {
         organizationId: oid,
         title: "Horizon Investor Conference",
         status: "CONFIRMED",
         contactId: james.id,
+        paymentTermsId: fiftyFifty.id,
         timeSlots: {
           create: [
-            { label: "Day 1 — Main Conference", spaceId: ballroom.id, startsAt: at(1, 9, 0), endsAt: at(1, 17, 0), sortOrder: 1 },
-            { label: "Day 2 — Workshops", spaceId: ballroom.id, startsAt: at(2, 9, 0), endsAt: at(2, 13, 0), sortOrder: 2 },
+            { label: "Day 1 — Main Conference", spaceId: ballroom.id, startsAt: at(1, 9, 0), endsAt: at(1, 17, 0), sortOrder: 1, personCount: 120, setupId: ballroomTheatre.id },
+            { label: "Day 2 — Workshops", spaceId: ballroom.id, startsAt: at(2, 9, 0), endsAt: at(2, 13, 0), sortOrder: 2, personCount: 120, setupId: ballroomTheatre.id },
           ],
         },
-        products: { create: [{ productId: avPackage.id, quantity: 1 }, { productId: coffeeBreak.id, quantity: 120 }, { productId: buffetLunch.id, quantity: 120 }] },
       },
+      include: { timeSlots: { orderBy: { sortOrder: "asc" } } },
     });
+    await attach(conf.id, conf.timeSlots[0].id, [
+      { productId: avPackage.id, quantity: 1 },
+      { productId: coffeeBreak.id, quantity: 120 },
+      { productId: buffetLunch.id, quantity: 120 },
+    ]);
   }
 
   // Activity entries + day backfill

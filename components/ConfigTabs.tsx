@@ -13,6 +13,7 @@ const TABS: { href: string; label: string; perm?: "MANAGE_USERS" }[] = [
   { href: "/config/task-templates", label: "Task Rules" },
   { href: "/config/sheet-templates", label: "Document Templates" },
   { href: "/config/policy", label: "Cancellation Policy" },
+  { href: "/config/payment-terms", label: "Payment Terms" },
   { href: "/config/users", label: "Users", perm: "MANAGE_USERS" },
 ];
 

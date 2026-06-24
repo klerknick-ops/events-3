@@ -11,6 +11,7 @@ export type DocBlock =
   | { type: "heading"; level: 1 | 2; text: string }
   | { type: "text"; text: string }
   | { type: "spacer" }
+  | { type: "image"; src: string }
   | { type: "schedule" }
   | { type: "product_table" }
   | { type: "room_block_table" }
@@ -22,6 +23,15 @@ const BLOCK_TOKENS = new Set([
   "room_block_table",
   "totals",
 ]);
+
+// Resolved image bytes + dimensions, passed to the PDF/DOCX renderers.
+export interface DocImage {
+  buffer: Buffer;
+  width: number;
+  height: number;
+  type: string;
+}
+export type ImageMap = Map<string, DocImage>;
 
 // Variables available to template authors (shown in the editor help panel).
 export const TEMPLATE_VARIABLES: { token: string; desc: string }[] = [
@@ -37,6 +47,10 @@ export const TEMPLATE_VARIABLES: { token: string; desc: string }[] = [
   { token: "{{total_amount}}", desc: "Gross grand total" },
   { token: "{{notes}}", desc: "Event notes" },
   { token: "{{cancellation_policy}}", desc: "Cancellation policy text" },
+  { token: "{{payment_terms}}", desc: "Selected payment terms text" },
+  { token: "{{payment_terms_name}}", desc: "Payment terms preset name" },
+  { token: "{{deposit_percent}}", desc: "Deposit % (if set)" },
+  { token: "{{deposit_amount}}", desc: "Deposit amount (deposit % of gross)" },
   { token: "{{generated_at}}", desc: "Generation timestamp" },
   { token: "{{schedule}}", desc: "Block: list of time slots" },
   { token: "{{product_table}}", desc: "Block: itemized products table" },
@@ -93,11 +107,71 @@ Thank you for considering us to host {{event_title}}. We are delighted to share 
 
 We would be delighted to welcome you and your guests.`;
 
+export const DEFAULT_CONFIRMATION_TEMPLATE = `# Booking Confirmation
+{{event_title}} — {{event_date}}
+
+Dear {{client_name}},
+
+This confirms your booking. Please review the details below and let us know of any changes.
+
+## Schedule
+{{schedule}}
+
+## Products & Services
+{{product_table}}
+
+## Hotel Rooms
+{{room_block_table}}
+
+## Totals
+{{totals}}
+
+## Payment Terms
+{{payment_terms}}
+
+## Cancellation Policy
+{{cancellation_policy}}
+
+We look forward to hosting you.`;
+
+export const DEFAULT_PROFORMA_TEMPLATE = `# Pro Forma Invoice
+{{event_title}} — {{event_date}}
+
+## Bill To
+{{client_name}}
+{{company_name}}
+{{contact_email}}
+
+## Products & Services
+{{product_table}}
+
+## Hotel Rooms
+{{room_block_table}}
+
+## Amount Due
+{{totals}}
+
+Deposit due now ({{deposit_percent}}): {{deposit_amount}}
+
+## Payment Terms
+{{payment_terms}}
+
+This is a pro forma invoice and is not a tax invoice.`;
+
 // Build the scalar variable map from sheet data + extras.
 export function buildDocVars(
   data: FunctionSheetData,
-  extra: { cancellationPolicy?: string } = {},
+  extra: {
+    cancellationPolicy?: string;
+    paymentTerms?: string;
+    paymentTermsName?: string;
+    depositPercent?: number | null;
+  } = {},
 ): Record<string, string> {
+  const depositAmount =
+    extra.depositPercent != null
+      ? data.fmt((data.totals.gross * extra.depositPercent) / 100)
+      : "";
   return {
     event_title: data.title,
     event_date: data.slots[0]?.range ?? "",
@@ -111,6 +185,10 @@ export function buildDocVars(
     total_amount: data.fmt(data.totals.gross),
     notes: data.notes ?? "",
     cancellation_policy: extra.cancellationPolicy ?? "",
+    payment_terms: extra.paymentTerms ?? "",
+    payment_terms_name: extra.paymentTermsName ?? "",
+    deposit_percent: extra.depositPercent != null ? `${extra.depositPercent}%` : "",
+    deposit_amount: depositAmount,
     generated_at: data.generatedAt,
   };
 }
@@ -128,6 +206,13 @@ export function renderTemplate(
   for (const raw of template.split("\n")) {
     const line = raw.replace(/\s+$/, "");
     const trimmed = line.trim();
+
+    // Image token: {{image:<url-or-key>}} on its own line.
+    const imageMatch = trimmed.match(/^\{\{image:(.+)\}\}$/);
+    if (imageMatch) {
+      blocks.push({ type: "image", src: imageMatch[1].trim() });
+      continue;
+    }
 
     const blockMatch = trimmed.match(/^\{\{(\w+)\}\}$/);
     if (blockMatch && BLOCK_TOKENS.has(blockMatch[1])) {

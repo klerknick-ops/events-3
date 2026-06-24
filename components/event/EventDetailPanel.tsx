@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { api } from "@/lib/fetcher";
-import type { EventFull, Space } from "@/lib/types";
+import type { EventFull, PaymentTerms, Space } from "@/lib/types";
 import {
   EVENT_STATUSES,
   EVENT_STATUS_LABELS,
@@ -148,6 +148,15 @@ export function EventDetailPanel({
             );
           })}
         </div>
+        <div className="mt-2">
+          <PaymentTermsSelect
+            value={event.paymentTermsId}
+            onChange={async (id) => {
+              await api.patch(`/api/events/${eventId}`, { paymentTermsId: id });
+              reload();
+            }}
+          />
+        </div>
       </div>
 
       {/* Section tabs */}
@@ -236,5 +245,36 @@ export function EventDetailPanel({
         </div>
       </div>
     </>
+  );
+}
+
+// Editable payment-terms selector shown under the status control.
+function PaymentTermsSelect({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const [terms, setTerms] = useState<PaymentTerms[]>([]);
+  useEffect(() => {
+    api.get<PaymentTerms[]>("/api/payment-terms").then(setTerms);
+  }, []);
+  return (
+    <label className="flex items-center gap-2 text-xs text-ink-muted">
+      <span className="font-medium uppercase tracking-wide">Payment terms</span>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="h-7 flex-1 rounded border border-base bg-surface px-2 text-xs text-ink"
+      >
+        <option value="">— None —</option>
+        {terms.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -10,6 +10,8 @@ export interface Space {
   archived: boolean;
 }
 
+export type PricingMode = "PER_PIECE" | "PER_PERSON";
+
 export interface Product {
   id: string;
   title: string;
@@ -17,6 +19,35 @@ export interface Product {
   imageUrl: string | null;
   priceNet: number;
   taxRate: number;
+  pricingMode: PricingMode;
+  archived: boolean;
+}
+
+export interface SetupRule {
+  id: string;
+  setupId: string;
+  minPersons: number;
+  tableCount: number | null;
+  headTables: boolean;
+  note: string | null;
+  sortOrder: number;
+}
+
+export interface Setup {
+  id: string;
+  spaceId: string;
+  name: string;
+  sortOrder: number;
+  archived: boolean;
+  rules?: SetupRule[];
+}
+
+export interface PaymentTerms {
+  id: string;
+  name: string;
+  depositPercent: number | null;
+  body: string;
+  sortOrder: number;
   archived: boolean;
 }
 
@@ -123,6 +154,12 @@ export interface TimeSlot {
   startsAt: string;
   endsAt: string;
   sortOrder: number;
+  personCount: number;
+  setupId: string | null;
+  setup?: Setup | null;
+  setupTableCount: number | null;
+  setupHeadTables: boolean;
+  setupManual: boolean;
 }
 
 export interface EventProduct {
@@ -196,6 +233,8 @@ export interface EventFull {
   templateId: string | null;
   contact: Contact;
   template?: { id: string; name: string } | null;
+  paymentTermsId: string | null;
+  paymentTerms?: PaymentTerms | null;
   days: EventDay[];
   timeSlots: TimeSlot[];
   products: EventProduct[];

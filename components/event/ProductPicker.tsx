@@ -4,22 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/fetcher";
 import type { Product, TimeSlot } from "@/lib/types";
 import { formatMoney, lineTotals } from "@/lib/money";
-import { Button, Input, Select, Spinner } from "@/components/ui";
+import { Button, Input, Spinner } from "@/components/ui";
 import { Modal } from "@/components/Modal";
 
-// Modal to add a catalog product to an event (optionally tied to a slot),
-// choosing a quantity at add-time.
+// Add a catalog product to a specific time slot. Per-person products default
+// their quantity to the slot's person count (still editable before adding).
 export function ProductPicker({
-  slots,
+  slot,
   onAdd,
   onClose,
 }: {
-  slots: TimeSlot[];
-  onAdd: (input: {
-    productId: string;
-    quantity: number;
-    slotId: string | null;
-  }) => Promise<void>;
+  slot: TimeSlot;
+  onAdd: (input: { productId: string; quantity: number }) => Promise<void>;
   onClose: () => void;
 }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -27,7 +23,7 @@ export function ProductPicker({
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [slotId, setSlotId] = useState<string>("");
+  const [qtyTouched, setQtyTouched] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -38,23 +34,31 @@ export function ProductPicker({
   }, []);
 
   const filtered = useMemo(
-    () =>
-      products.filter((p) =>
-        p.title.toLowerCase().includes(q.toLowerCase()),
-      ),
+    () => products.filter((p) => p.title.toLowerCase().includes(q.toLowerCase())),
     [products, q],
   );
+
+  // When a product is picked, default the quantity: per-person → slot headcount.
+  function pick(p: Product) {
+    setSelected(p);
+    if (!qtyTouched) {
+      setQuantity(
+        p.pricingMode === "PER_PERSON" ? Math.max(1, slot.personCount) : 1,
+      );
+    }
+  }
 
   const preview = selected
     ? lineTotals(selected.priceNet, quantity, selected.taxRate)
     : null;
+  const perPerson = selected?.pricingMode === "PER_PERSON";
 
   return (
     <Modal
       open
       onClose={onClose}
       size="lg"
-      title="Add product"
+      title={`Add product · ${slot.label || slot.space?.name || "Slot"}`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -65,16 +69,12 @@ export function ProductPicker({
             onClick={async () => {
               if (!selected) return;
               setSaving(true);
-              await onAdd({
-                productId: selected.id,
-                quantity,
-                slotId: slotId || null,
-              });
+              await onAdd({ productId: selected.id, quantity });
               setSaving(false);
               onClose();
             }}
           >
-            {saving ? "Adding…" : "Add to event"}
+            {saving ? "Adding…" : "Add to slot"}
           </Button>
         </>
       }
@@ -93,14 +93,12 @@ export function ProductPicker({
                 <Spinner />
               </div>
             ) : filtered.length === 0 ? (
-              <p className="py-4 text-center text-sm text-ink-muted">
-                No products found.
-              </p>
+              <p className="py-4 text-center text-sm text-ink-muted">No products found.</p>
             ) : (
               filtered.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => setSelected(p)}
+                  onClick={() => pick(p)}
                   className={
                     "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition " +
                     (selected?.id === p.id
@@ -111,19 +109,14 @@ export function ProductPicker({
                   <span className="h-9 w-9 shrink-0 overflow-hidden rounded bg-muted">
                     {p.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={p.imageUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                      <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-ink">
-                      {p.title}
-                    </span>
+                    <span className="block truncate text-sm font-medium text-ink">{p.title}</span>
                     <span className="block text-xs text-ink-muted">
-                      {formatMoney(p.priceNet)} net · {p.taxRate}% tax
+                      {formatMoney(p.priceNet)} net · {p.taxRate}% tax ·{" "}
+                      {p.pricingMode === "PER_PERSON" ? "per person" : "per piece"}
                     </span>
                   </span>
                 </button>
@@ -136,13 +129,9 @@ export function ProductPicker({
           {selected ? (
             <>
               <div className="rounded-lg border border-base p-3">
-                <div className="text-sm font-medium text-ink">
-                  {selected.title}
-                </div>
+                <div className="text-sm font-medium text-ink">{selected.title}</div>
                 {selected.description ? (
-                  <p className="mt-1 text-xs text-ink-muted">
-                    {selected.description}
-                  </p>
+                  <p className="mt-1 text-xs text-ink-muted">{selected.description}</p>
                 ) : null}
               </div>
               <div>
@@ -153,29 +142,18 @@ export function ProductPicker({
                   type="number"
                   min={1}
                   value={quantity}
-                  onChange={(e) =>
-                    setQuantity(Math.max(1, Number(e.target.value) || 1))
-                  }
+                  onChange={(e) => {
+                    setQtyTouched(true);
+                    setQuantity(Math.max(1, Number(e.target.value) || 1));
+                  }}
                 />
+                {perPerson ? (
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Per person — defaulted to this slot&rsquo;s {slot.personCount} guest
+                    {slot.personCount === 1 ? "" : "s"}. Adjust if needed.
+                  </p>
+                ) : null}
               </div>
-              {slots.length > 1 ? (
-                <div>
-                  <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-ink-muted">
-                    Attach to slot (optional)
-                  </label>
-                  <Select
-                    value={slotId}
-                    onChange={(e) => setSlotId(e.target.value)}
-                  >
-                    <option value="">Whole event</option>
-                    {slots.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label || s.space?.name || "Slot"}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              ) : null}
               {preview ? (
                 <div className="rounded-lg bg-surface-2 p-3 text-sm">
                   <div className="flex justify-between text-ink-soft">

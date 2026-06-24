@@ -35,6 +35,7 @@ model Organization {
   events        Event[]
   settings      Setting[]
   activities    ActivityLog[]
+  paymentTerms  PaymentTerms[]
 }
 
 // ---------- Users & auth ----------
@@ -124,8 +125,42 @@ model BookableSpace {
 
   timeSlots     EventTimeSlot[]
   templateSlots TemplateSlot[]
+  setups        Setup[]
 
   @@index([organizationId])
+}
+
+// Room layout / "opstelling" available for a specific space (Theatre, U-shape,
+// Banquet rounds, Boardroom…). Setups are configured per BookableSpace.
+model Setup {
+  id        String        @id @default(cuid())
+  spaceId   String
+  space     BookableSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int           @default(0)
+  archived  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  rules     SetupRule[]
+  timeSlots EventTimeSlot[]
+
+  @@index([spaceId])
+}
+
+// Threshold rule: when a slot's person count >= minPersons, apply these layout
+// attributes (e.g. 2 tables at 18+, head tables at 32+).
+model SetupRule {
+  id         String  @id @default(cuid())
+  setupId    String
+  setup      Setup   @relation(fields: [setupId], references: [id], onDelete: Cascade)
+  minPersons Int
+  tableCount Int? // resulting number of tables at/above this threshold
+  headTables Boolean @default(false) // add head/end tables
+  note       String? // free-text layout note
+  sortOrder  Int     @default(0)
+
+  @@index([setupId])
 }
 
 model Product {
@@ -137,6 +172,7 @@ model Product {
   imageUrl       String?
   priceNet       Float        @default(0)
   taxRate        Float        @default(0) // percentage, e.g. 21 for 21%
+  pricingMode    String       @default("PER_PIECE") // PER_PIECE | PER_PERSON
   archived       Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -165,6 +201,25 @@ model HotelRoomType {
   updatedAt      DateTime     @updatedAt
 
   bookings EventRoomBooking[]
+
+  @@index([organizationId])
+}
+
+// Reusable payment-terms preset (deposit % + balance arrangement), selectable
+// when creating an event and insertable into documents.
+model PaymentTerms {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  depositPercent Int? // e.g. 50
+  body           String // full terms text used in documents
+  sortOrder      Int          @default(0)
+  archived       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  events Event[]
 
   @@index([organizationId])
 }
@@ -266,6 +321,8 @@ model Event {
   contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Restrict)
   templateId     String?
   template       EventTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  paymentTermsId String?
+  paymentTerms   PaymentTerms?  @relation(fields: [paymentTermsId], references: [id], onDelete: SetNull)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -313,10 +370,20 @@ model EventTimeSlot {
   endsAt    DateTime
   sortOrder Int           @default(0)
 
+  // Person count governs per-person product quantities + setup auto-rules.
+  personCount Int     @default(0)
+  // Chosen room setup + its (possibly auto-applied, possibly overridden) layout.
+  setupId         String?
+  setup           Setup?  @relation(fields: [setupId], references: [id], onDelete: SetNull)
+  setupTableCount Int?
+  setupHeadTables Boolean @default(false)
+  setupManual     Boolean @default(false) // true once the user overrides auto-rules
+
   products EventProduct[]
 
   @@index([eventId])
   @@index([dayId])
+  @@index([setupId])
   @@index([spaceId, startsAt])
 }
 

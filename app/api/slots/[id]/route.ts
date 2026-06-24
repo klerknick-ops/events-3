@@ -4,6 +4,7 @@ import { badRequest, conflict, notFound, ok, parseBody, route } from "@/lib/api"
 import { findSlotConflicts } from "@/lib/conflicts";
 import { requireOrg } from "@/lib/tenant";
 import { ensureEventDays } from "@/lib/event-days";
+import { computeSlotSetup } from "@/lib/slot-setup";
 import { logActivity } from "@/lib/activity";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -13,6 +14,11 @@ const schema = z.object({
   label: z.string().nullish(),
   startsAt: z.string().optional(),
   endsAt: z.string().optional(),
+  personCount: z.coerce.number().int().min(0).optional(),
+  setupId: z.string().nullish(),
+  setupTableCount: z.coerce.number().int().min(0).nullable().optional(),
+  setupHeadTables: z.boolean().optional(),
+  setupManual: z.boolean().optional(),
   force: z.boolean().optional(),
 });
 
@@ -51,6 +57,21 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
     }
   }
 
+  // Recompute setup fields. If the user manually overrode the layout, keep it;
+  // otherwise re-derive from the setup's rules + (possibly new) person count.
+  const personCount = body.personCount ?? existing.personCount;
+  const manual = body.setupManual ?? existing.setupManual;
+  const setupFields = await computeSlotSetup({
+    spaceId,
+    personCount,
+    setupId: body.setupId !== undefined ? body.setupId : existing.setupId,
+    manual,
+    tableCount:
+      body.setupTableCount !== undefined ? body.setupTableCount : existing.setupTableCount,
+    headTables:
+      body.setupHeadTables !== undefined ? body.setupHeadTables : existing.setupHeadTables,
+  });
+
   const slot = await prisma.eventTimeSlot.update({
     where: { id },
     data: {
@@ -58,6 +79,8 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
       label: body.label === undefined ? undefined : body.label,
       startsAt,
       endsAt,
+      personCount,
+      ...setupFields,
     },
     include: { space: true },
   });

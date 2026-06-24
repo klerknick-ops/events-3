@@ -3,6 +3,7 @@ import {
   BorderStyle,
   Document,
   HeadingLevel,
+  ImageRun,
   Packer,
   Paragraph,
   Table,
@@ -12,15 +13,18 @@ import {
   WidthType,
 } from "docx";
 import type { FunctionSheetData, FunctionSheetGroup } from "./function-sheet";
-import type { DocBlock } from "./doc-template";
+import type { DocBlock, ImageMap } from "./doc-template";
 
 const BRAND = "4F46E5";
 const MUTED = "64748B";
+
+type DocxImageType = "png" | "jpg" | "gif" | "bmp";
 
 // Render templated document blocks + sheet data to an editable .docx buffer.
 export async function renderDocDocx(
   blocks: DocBlock[],
   data: FunctionSheetData,
+  images?: ImageMap,
 ): Promise<Buffer> {
   const children: (Paragraph | Table)[] = [];
 
@@ -50,6 +54,33 @@ export async function renderDocDocx(
       case "spacer":
         children.push(new Paragraph({ children: [new TextRun({ text: "", size: 10 })] }));
         break;
+      case "image": {
+        const img = images?.get(block.src);
+        if (img) {
+          const maxW = 450;
+          const scale = img.width > maxW ? maxW / img.width : 1;
+          const t = img.type === "jpeg" ? "jpg" : img.type;
+          const allowed: DocxImageType[] = ["png", "jpg", "gif", "bmp"];
+          if (allowed.includes(t as DocxImageType)) {
+            children.push(
+              new Paragraph({
+                spacing: { before: 80, after: 80 },
+                children: [
+                  new ImageRun({
+                    data: img.buffer,
+                    type: t as DocxImageType,
+                    transformation: {
+                      width: Math.round(img.width * scale),
+                      height: Math.round(img.height * scale),
+                    },
+                  }),
+                ],
+              }),
+            );
+          }
+        }
+        break;
+      }
       case "schedule":
         if (data.slots.length === 0) {
           children.push(muted("No scheduled slots."));
