@@ -10,7 +10,9 @@ export interface Space {
   archived: boolean;
 }
 
-export type PricingMode = "PER_PIECE" | "PER_PERSON";
+// EVENT  → always quantity 1 regardless of attendance (e.g. a microphone, a screen)
+// GUEST  → quantity defaults to the slot's person count, fully adjustable afterward
+export type ProductType = "EVENT" | "GUEST";
 
 export interface Product {
   id: string;
@@ -19,7 +21,7 @@ export interface Product {
   imageUrl: string | null;
   priceNet: number;
   taxRate: number;
-  pricingMode: PricingMode;
+  productType: ProductType;
   archived: boolean;
 }
 
@@ -222,6 +224,35 @@ export interface ActivityEntry {
   summary: string;
   createdAt: string;
   event?: { id: string; title: string } | null;
+}
+
+export type EmailLabel = "VENDOR" | "SUPPLIER";
+
+export interface EmailMessage {
+  id: string;
+  direction: "INBOUND" | "OUTBOUND";
+  fromAddress: string;
+  fromName: string | null;
+  toAddresses: string;
+  subject: string;
+  bodyPreview: string | null;
+  body: string;
+  bodyIsHtml: boolean;
+  receivedAt: string;
+  isRead: boolean;
+  label: EmailLabel | null;
+  contactId: string | null;
+  contact?: { id: string; firstName: string; lastName: string } | null;
+  eventId: string | null;
+  event?: { id: string; title: string } | null;
+  autoMatched: boolean;
+}
+
+export interface InboxResponse {
+  configured: boolean;
+  mailbox: string | null;
+  counts: { client: number; leads: number };
+  messages: EmailMessage[];
 }
 
 export interface EventFull {

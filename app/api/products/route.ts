@@ -28,6 +28,7 @@ export const POST = route(async (req) => {
   let priceNet = 0;
   let taxRate = 0;
   let imageUrl: string | null = null;
+  let productType = "EVENT";
 
   if (ct.includes("multipart/form-data")) {
     const form = await req.formData();
@@ -35,6 +36,7 @@ export const POST = route(async (req) => {
     description = (form.get("description") as string)?.trim() || null;
     priceNet = Number(form.get("priceNet") || 0);
     taxRate = Number(form.get("taxRate") || 0);
+    productType = String(form.get("productType") || "EVENT");
     const image = form.get("image");
     if (image instanceof File && image.size > 0) {
       const stored = await saveImage(image, image.name, orgId);
@@ -47,7 +49,9 @@ export const POST = route(async (req) => {
     priceNet = Number(body.priceNet || 0);
     taxRate = Number(body.taxRate || 0);
     imageUrl = body.imageUrl ?? null;
+    productType = String(body.productType || "EVENT");
   }
+  if (productType !== "GUEST" && productType !== "EVENT") productType = "EVENT";
 
   if (!title) return badRequest("Title is required");
   if (!Number.isFinite(priceNet) || priceNet < 0)
@@ -56,7 +60,7 @@ export const POST = route(async (req) => {
     return badRequest("Tax rate must be a non-negative number");
 
   const product = await prisma.product.create({
-    data: { organizationId: orgId, title, description, priceNet, taxRate, imageUrl },
+    data: { organizationId: orgId, title, description, priceNet, taxRate, imageUrl, productType },
   });
   return created(product);
 });

@@ -21,16 +21,18 @@ import { ProductsTab } from "./tabs/ProductsTab";
 import { TasksTab } from "./tabs/TasksTab";
 import { RoomsTab } from "./tabs/RoomsTab";
 import { NotesTab } from "./tabs/NotesTab";
+import { InboxTab } from "./tabs/InboxTab";
 import { ActivityTab } from "./tabs/ActivityTab";
 import { ExportMenu } from "./ExportMenu";
 
-type TabKey = "schedule" | "products" | "rooms" | "tasks" | "notes" | "activity";
+type TabKey = "schedule" | "products" | "rooms" | "tasks" | "notes" | "inbox" | "activity";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "schedule", label: "Schedule" },
   { key: "products", label: "Products" },
   { key: "rooms", label: "Rooms" },
   { key: "tasks", label: "Tasks" },
   { key: "notes", label: "Notes" },
+  { key: "inbox", label: "Inbox" },
   { key: "activity", label: "Activity" },
 ];
 // Day selector is only relevant to day-scoped tabs.
@@ -206,6 +208,8 @@ export function EventDetailPanel({
           <TasksTab event={event} reload={reload} />
         ) : tab === "notes" ? (
           <NotesTab event={event} reload={reload} />
+        ) : tab === "inbox" ? (
+          <InboxTab event={event} />
         ) : (
           <ActivityTab event={event} />
         )}

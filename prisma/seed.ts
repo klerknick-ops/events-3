@@ -45,19 +45,19 @@ async function seedOrganization(cfg: OrgSeed) {
     prisma.bookableSpace.create({ data: { organizationId: oid, name: "Meeting Room A", capacity: 40, color: "#0284c7", sortOrder: 4 } }),
   ]);
 
-  // Products (pricingMode: PER_PERSON for catering/guest items, PER_PIECE for gear/decor)
-  const mk = (title: string, description: string, priceNet: number, taxRate: number, pricingMode: string, imageUrl: string) =>
-    prisma.product.create({ data: { organizationId: oid, title, description, priceNet, taxRate, pricingMode, imageUrl } });
+  // Products (productType: GUEST for catering/per-guest items, EVENT for fixed gear/decor)
+  const mk = (title: string, description: string, priceNet: number, taxRate: number, productType: string, imageUrl: string) =>
+    prisma.product.create({ data: { organizationId: oid, title, description, priceNet, taxRate, productType, imageUrl } });
   const [welcomeDrinks, platedDinner, buffetLunch, winePairing, avPackage, coffeeBreak, floralCenterpiece, cakeService] =
     await Promise.all([
-      mk("Welcome Drinks Reception", "Sparkling wine & canapés on arrival, per guest.", 18, 21, "PER_PERSON", "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=400&q=70"),
-      mk("Plated 3-Course Dinner", "Seasonal three-course plated dinner, per guest.", 68, 21, "PER_PERSON", "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&q=70"),
-      mk("Buffet Lunch", "Hot & cold buffet lunch with dessert station, per guest.", 42, 21, "PER_PERSON", "https://images.unsplash.com/photo-1555244162-803834f70033?w=400&q=70"),
-      mk("Wine Pairing", "Sommelier-selected wine pairing, per guest.", 35, 21, "PER_PERSON", "https://images.unsplash.com/photo-1510626176961-4b57d4fbad03?w=400&q=70"),
-      mk("AV & PA Package", "Projector, screen, microphones and sound desk.", 450, 21, "PER_PIECE", "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=400&q=70"),
-      mk("Coffee & Pastry Break", "Barista coffee, tea and pastries, per guest.", 12, 9, "PER_PERSON", "https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=400&q=70"),
-      mk("Floral Centerpiece", "Seasonal floral centerpiece, per table.", 55, 9, "PER_PIECE", "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400&q=70"),
-      mk("Cake Cutting & Service", "Cake plating and table service.", 120, 9, "PER_PIECE", "https://images.unsplash.com/photo-1535141192574-5d4897c12636?w=400&q=70"),
+      mk("Welcome Drinks Reception", "Sparkling wine & canapés on arrival, per guest.", 18, 21, "GUEST", "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=400&q=70"),
+      mk("Plated 3-Course Dinner", "Seasonal three-course plated dinner, per guest.", 68, 21, "GUEST", "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&q=70"),
+      mk("Buffet Lunch", "Hot & cold buffet lunch with dessert station, per guest.", 42, 21, "GUEST", "https://images.unsplash.com/photo-1555244162-803834f70033?w=400&q=70"),
+      mk("Wine Pairing", "Sommelier-selected wine pairing, per guest.", 35, 21, "GUEST", "https://images.unsplash.com/photo-1510626176961-4b57d4fbad03?w=400&q=70"),
+      mk("AV & PA Package", "Projector, screen, microphones and sound desk.", 450, 21, "EVENT", "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=400&q=70"),
+      mk("Coffee & Pastry Break", "Barista coffee, tea and pastries, per guest.", 12, 9, "GUEST", "https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=400&q=70"),
+      mk("Floral Centerpiece", "Seasonal floral centerpiece, per table.", 55, 9, "EVENT", "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400&q=70"),
+      mk("Cake Cutting & Service", "Cake plating and table service.", 120, 9, "EVENT", "https://images.unsplash.com/photo-1535141192574-5d4897c12636?w=400&q=70"),
     ]);
 
   // Setups (room layouts) per space, with threshold rules keyed off person count.

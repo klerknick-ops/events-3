@@ -18,6 +18,7 @@ const LINKS: {
   { href: "/timeline", label: "Timeline" },
   { href: "/tasks", label: "Tasks" },
   { href: "/clients", label: "Clients" },
+  { href: "/inbox", label: "Inbox", perm: "VIEW_GLOBAL_ACTIVITY" },
   { href: "/reports", label: "Reports", perm: "VIEW_GLOBAL_ACTIVITY" },
   { href: "/activity", label: "Activity", perm: "VIEW_GLOBAL_ACTIVITY" },
 ];

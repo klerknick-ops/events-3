@@ -38,12 +38,12 @@ export function ProductPicker({
     [products, q],
   );
 
-  // When a product is picked, default the quantity: per-person → slot headcount.
+  // When a product is picked, default the quantity: guest products → slot headcount.
   function pick(p: Product) {
     setSelected(p);
     if (!qtyTouched) {
       setQuantity(
-        p.pricingMode === "PER_PERSON" ? Math.max(1, slot.personCount) : 1,
+        p.productType === "GUEST" ? Math.max(1, slot.personCount) : 1,
       );
     }
   }
@@ -51,7 +51,7 @@ export function ProductPicker({
   const preview = selected
     ? lineTotals(selected.priceNet, quantity, selected.taxRate)
     : null;
-  const perPerson = selected?.pricingMode === "PER_PERSON";
+  const guestProduct = selected?.productType === "GUEST";
 
   return (
     <Modal
@@ -116,7 +116,7 @@ export function ProductPicker({
                     <span className="block truncate text-sm font-medium text-ink">{p.title}</span>
                     <span className="block text-xs text-ink-muted">
                       {formatMoney(p.priceNet)} net · {p.taxRate}% tax ·{" "}
-                      {p.pricingMode === "PER_PERSON" ? "per person" : "per piece"}
+                      {p.productType === "GUEST" ? "guest product" : "event product"}
                     </span>
                   </span>
                 </button>
@@ -147,12 +147,16 @@ export function ProductPicker({
                     setQuantity(Math.max(1, Number(e.target.value) || 1));
                   }}
                 />
-                {perPerson ? (
+                {guestProduct ? (
                   <p className="mt-1 text-xs text-ink-muted">
-                    Per person — defaulted to this slot&rsquo;s {slot.personCount} guest
+                    Guest product — defaulted to this slot&rsquo;s {slot.personCount} guest
                     {slot.personCount === 1 ? "" : "s"}. Adjust if needed.
                   </p>
-                ) : null}
+                ) : (
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Event product — added once regardless of attendance. Adjust if needed.
+                  </p>
+                )}
               </div>
               {preview ? (
                 <div className="rounded-lg bg-surface-2 p-3 text-sm">

@@ -36,6 +36,8 @@ model Organization {
   settings      Setting[]
   activities    ActivityLog[]
   paymentTerms  PaymentTerms[]
+  generatedDocs GeneratedDocument[]
+  emails        EmailMessage[]
 }
 
 // ---------- Users & auth ----------
@@ -104,6 +106,7 @@ model Contact {
   updatedAt      DateTime     @updatedAt
 
   events Event[]
+  emails EmailMessage[]
 
   @@index([organizationId])
   @@index([companyId])
@@ -172,7 +175,7 @@ model Product {
   imageUrl       String?
   priceNet       Float        @default(0)
   taxRate        Float        @default(0) // percentage, e.g. 21 for 21%
-  pricingMode    String       @default("PER_PIECE") // PER_PIECE | PER_PERSON
+  productType    String       @default("EVENT") // EVENT (qty 1) | GUEST (qty from slot person count)
   archived       Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -333,10 +336,66 @@ model Event {
   tasks        Task[]
   eventNotes   EventNote[]
   activities   ActivityLog[]
+  generatedDocs GeneratedDocument[]
+  emails       EmailMessage[]
 
   @@index([organizationId])
   @@index([contactId])
   @@index([status])
+}
+
+// A saved version of a generated document (Function Sheet / Proposal /
+// Confirmation / Pro Forma). The JSON snapshot captures the line-item data used
+// to produce it, so a later version can be diffed against the previous one to
+// highlight what changed.
+model GeneratedDocument {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventId        String
+  event          Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  docType        String       // function_sheet | proposal | confirmation | proforma
+  version        Int
+  snapshot       Json
+  generatedAt    DateTime     @default(now())
+
+  @@unique([eventId, docType, version])
+  @@index([organizationId])
+  @@index([eventId, docType])
+}
+
+// An email synced from / sent through the connected Microsoft 365 mailbox.
+// Inbound mail whose sender matches a Contact-with-event is auto-linked to that
+// event (Client Mail); everything else lands in Leads & Vendors where it can be
+// labelled Vendor/Supplier and manually linked to an event.
+model EmailMessage {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  graphId        String?      // Microsoft Graph message id (null for not-yet-synced local sends)
+  conversationId String?      // Graph conversation/thread id
+  direction      String       // INBOUND | OUTBOUND
+  fromAddress    String
+  fromName       String?
+  toAddresses    String       // comma-separated recipients
+  subject        String
+  bodyPreview    String?
+  body           String       @default("")
+  bodyIsHtml     Boolean      @default(true)
+  receivedAt     DateTime
+  isRead         Boolean      @default(false)
+  label          String?      // VENDOR | SUPPLIER (null = lead / untagged)
+  contactId      String?
+  contact        Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  eventId        String?
+  event          Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  autoMatched    Boolean      @default(false) // event link came from a contact match
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, graphId])
+  @@index([organizationId])
+  @@index([eventId])
+  @@index([contactId])
 }
 
 // A single calendar day within an event. Single-day events have exactly one

@@ -16,6 +16,12 @@ import {
 import { renderDocPdf } from "./pdf";
 import { renderDocDocx } from "./docx-gen";
 import { getObject, keyFromUrl } from "./storage";
+import {
+  annotateDiff,
+  buildSnapshot,
+  snapshotsEqual,
+  type DocSnapshot,
+} from "./doc-version";
 
 export type DocKind = "function_sheet" | "proposal" | "confirmation" | "proforma";
 export type DocFormat = "pdf" | "docx";
@@ -87,11 +93,25 @@ async function loadImages(blocks: DocBlock[]): Promise<ImageMap> {
 }
 
 // Render an event document for a given kind/format, optionally scoped to a day.
+// Full-event exports (no dayId) are recorded as versions in the event's document
+// history; when `highlight` is set and a previous version exists, changed line
+// items are tagged so the renderers mark them with a yellow background.
 export async function renderEventDoc(
   event: FullEvent,
-  opts: { kind: DocKind; format: DocFormat; dayId?: string | null },
+  opts: {
+    kind: DocKind;
+    format: DocFormat;
+    dayId?: string | null;
+    highlight?: boolean;
+  },
 ): Promise<RenderedDoc> {
   const data = buildFunctionSheet(event, opts.dayId);
+
+  // Version history + diff (full-event scope only — per-day exports skip this).
+  if (!opts.dayId) {
+    await applyVersioning(event, opts.kind, data, opts.highlight ?? false);
+  }
+
   const policy = await getCancellationPolicy(event.organizationId);
   const vars = buildDocVars(data, {
     cancellationPolicy: policy,
@@ -128,4 +148,70 @@ export async function renderEventDoc(
 
 function safeName(s: string) {
   return s.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase();
+}
+
+// Record a new version (only when content changed vs the latest stored version)
+// and, if requested, annotate the live data with diff tags vs the previous
+// distinct version so the renderers can highlight what changed.
+async function applyVersioning(
+  event: FullEvent,
+  kind: DocKind,
+  data: ReturnType<typeof buildFunctionSheet>,
+  highlight: boolean,
+): Promise<void> {
+  const newSnap = buildSnapshot(data);
+  const recent = await prisma.generatedDocument.findMany({
+    where: { eventId: event.id, docType: kind },
+    orderBy: { version: "desc" },
+    take: 2,
+  });
+  const latest = recent[0];
+  const latestSnap = latest ? (latest.snapshot as unknown as DocSnapshot) : null;
+  const sameAsLatest = latestSnap ? snapshotsEqual(latestSnap, newSnap) : false;
+
+  // The version to diff against = the most recent version whose content differs
+  // from what we're producing now.
+  const priorSnap = sameAsLatest
+    ? recent[1]
+      ? (recent[1].snapshot as unknown as DocSnapshot)
+      : null
+    : latestSnap;
+
+  if (highlight && priorSnap) annotateDiff(data, priorSnap);
+
+  // Save a new version only when content actually changed.
+  if (!latest || !sameAsLatest) {
+    await prisma.generatedDocument.create({
+      data: {
+        organizationId: event.organizationId,
+        eventId: event.id,
+        docType: kind,
+        version: (latest?.version ?? 0) + 1,
+        snapshot: newSnap as unknown as object,
+      },
+    });
+  }
+}
+
+export interface DocVersionInfo {
+  id: string;
+  version: number;
+  generatedAt: string;
+}
+
+// Version history for one doc type on an event (newest first).
+export async function listDocVersions(
+  eventId: string,
+  kind: DocKind,
+): Promise<DocVersionInfo[]> {
+  const rows = await prisma.generatedDocument.findMany({
+    where: { eventId, docType: kind },
+    orderBy: { version: "desc" },
+    select: { id: true, version: true, generatedAt: true },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    version: r.version,
+    generatedAt: r.generatedAt.toISOString(),
+  }));
 }

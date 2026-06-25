@@ -5,6 +5,20 @@ import type { DocBlock, ImageMap } from "./doc-template";
 const BRAND = "#4f46e5";
 const INK = "#0f172a";
 const MUTED = "#64748b";
+const HIGHLIGHT = "#fef08a"; // yellow-200, marks lines changed since the prior version
+
+// Draw a yellow background behind a region (used for changed line items).
+function highlightRect(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  doc.save();
+  doc.rect(x, y, w, h).fill(HIGHLIGHT);
+  doc.restore();
+}
 
 // Render a templated document (ordered blocks + sheet data) to a PDF buffer.
 export function renderDocPdf(
@@ -91,6 +105,9 @@ function renderSchedule(doc: PDFKit.PDFDocument, data: FunctionSheetData) {
   }
   for (const s of data.slots) {
     ensureSpace(doc, 24);
+    const left = doc.page.margins.left;
+    const cw = doc.page.width - doc.page.margins.right - left;
+    if (s.changed) highlightRect(doc, left - 2, doc.y - 2, cw + 4, 26);
     doc.fillColor(INK).font("Helvetica-Bold").fontSize(10).text(s.label);
     doc.fillColor(MUTED).font("Helvetica").fontSize(9.5).text(s.range);
     doc.moveDown(0.15);
@@ -133,12 +150,19 @@ function renderProductTable(
     for (const line of group.lines) {
       ensureSpace(doc, 20);
       const rowY = doc.y;
+      const titleH = doc
+        .font("Helvetica")
+        .fontSize(9.5)
+        .heightOfString(line.title, { width: contentWidth * 0.48 });
+      const rowH = Math.max(titleH, 12);
+      if (line.changed) highlightRect(doc, left - 2, rowY - 2, contentWidth + 4, rowH + 4);
       doc.fontSize(9.5).fillColor(INK).font("Helvetica");
       doc.text(line.title, cols.item, rowY, { width: contentWidth * 0.48 });
       doc.text(String(line.quantity), cols.qty, rowY, { width: contentWidth * 0.1, align: "right" });
       doc.text(data.fmt(line.unitNet), cols.unit, rowY, { width: contentWidth * 0.12, align: "right" });
       doc.fillColor(MUTED).text(`${line.taxRate}%`, cols.tax, rowY, { width: contentWidth * 0.1, align: "right" });
       doc.fillColor(INK).font("Helvetica-Bold").text(data.fmt(line.gross), cols.total, rowY, { width: contentWidth * 0.12, align: "right" });
+      doc.y = rowY + rowH;
       doc.moveDown(0.3);
     }
   }
@@ -158,6 +182,7 @@ function renderRoomTable(
   for (const r of data.rooms) {
     ensureSpace(doc, 26);
     const y = doc.y;
+    if (r.changed) highlightRect(doc, left - 2, y - 2, contentWidth + 4, 28);
     doc.fontSize(9.5).fillColor(INK).font("Helvetica-Bold");
     doc.text(`${r.quantity}× ${r.title}`, left, y, { width: contentWidth * 0.6 });
     doc.font("Helvetica-Bold").text(data.fmt(r.gross), left + contentWidth * 0.8, y, {
@@ -185,6 +210,13 @@ function renderTotals(
   const boxW = contentWidth * 0.45;
   const boxX = right - boxW;
   let by = doc.y;
+  // Highlight the whole totals box when the grand totals changed.
+  if (data.totalsChanged) {
+    const bothShown = data.productTotals.gross > 0 && data.roomTotals.gross > 0;
+    const rowCount = (bothShown ? 2 : 0) + 1 + data.totals.byRate.length;
+    const boxH = rowCount * 14 + 6 + 18;
+    highlightRect(doc, boxX - 4, by - 3, boxW + 8, boxH + 6);
+  }
   const line = (label: string, value: string, bold = false) => {
     doc
       .fontSize(bold ? 11 : 9.5)

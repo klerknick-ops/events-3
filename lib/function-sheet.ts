@@ -6,6 +6,9 @@ import { formatMoney, sumTotals, type LineTax, type Totals } from "./money";
 
 // Normalized, format-agnostic representation of a function sheet. Both the PDF
 // and DOCX generators consume this so the two stay consistent.
+// Optional diff tag set by lib/doc-version when "highlight updates" is on.
+export type LineChange = "added" | "modified" | "removed";
+
 export interface FunctionSheetLine {
   title: string;
   quantity: number;
@@ -14,6 +17,7 @@ export interface FunctionSheetLine {
   net: number;
   taxAmount: number;
   gross: number;
+  changed?: LineChange;
 }
 
 export interface FunctionSheetGroup {
@@ -29,6 +33,7 @@ export interface FunctionSheetRoomLine {
   unitNet: number;
   taxRate: number;
   gross: number;
+  changed?: LineChange;
 }
 
 export interface FunctionSheetData {
@@ -41,12 +46,13 @@ export interface FunctionSheetData {
     email: string | null;
     phone: string | null;
   };
-  slots: { label: string; range: string }[];
+  slots: { label: string; range: string; changed?: boolean }[];
   groups: FunctionSheetGroup[];
   rooms: FunctionSheetRoomLine[];
   roomTotals: Totals;
   productTotals: Totals;
   totals: Totals; // grand total (products + rooms)
+  totalsChanged?: boolean; // set by lib/doc-version when "highlight updates" is on
   notes: string | null;
   fmt: (n: number) => string;
 }

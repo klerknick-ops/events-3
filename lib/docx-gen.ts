@@ -6,6 +6,7 @@ import {
   ImageRun,
   Packer,
   Paragraph,
+  ShadingType,
   Table,
   TableCell,
   TableRow,
@@ -17,6 +18,14 @@ import type { DocBlock, ImageMap } from "./doc-template";
 
 const BRAND = "4F46E5";
 const MUTED = "64748B";
+const HIGHLIGHT = "FEF08A"; // yellow-200, marks lines changed since the prior version
+
+// Paragraph/cell shading used to mark a changed line item.
+const highlightShading = {
+  type: ShadingType.CLEAR,
+  color: "auto",
+  fill: HIGHLIGHT,
+} as const;
 
 type DocxImageType = "png" | "jpg" | "gif" | "bmp";
 
@@ -88,6 +97,7 @@ export async function renderDocDocx(
           for (const s of data.slots) {
             children.push(
               new Paragraph({
+                ...(s.changed ? { shading: highlightShading } : {}),
                 children: [
                   new TextRun({ text: `${s.label}: `, bold: true, size: 20 }),
                   new TextRun({ text: s.range, size: 20, color: MUTED }),
@@ -116,6 +126,7 @@ export async function renderDocDocx(
           for (const r of data.rooms) {
             children.push(
               new Paragraph({
+                ...(r.changed ? { shading: highlightShading } : {}),
                 children: [
                   new TextRun({ text: `${r.quantity}× ${r.title} — `, bold: true, size: 20 }),
                   new TextRun({
@@ -129,17 +140,19 @@ export async function renderDocDocx(
           }
         }
         break;
-      case "totals":
+      case "totals": {
+        const hl = data.totalsChanged === true;
         if (data.productTotals.gross > 0 && data.roomTotals.gross > 0) {
-          children.push(totalLine("Products", data.fmt(data.productTotals.gross)));
-          children.push(totalLine("Hotel rooms", data.fmt(data.roomTotals.gross)));
+          children.push(totalLine("Products", data.fmt(data.productTotals.gross), false, hl));
+          children.push(totalLine("Hotel rooms", data.fmt(data.roomTotals.gross), false, hl));
         }
-        children.push(totalLine("Net", data.fmt(data.totals.net)));
+        children.push(totalLine("Net", data.fmt(data.totals.net), false, hl));
         for (const r of data.totals.byRate) {
-          children.push(totalLine(`Tax @ ${r.taxRate}%`, data.fmt(r.taxAmount)));
+          children.push(totalLine(`Tax @ ${r.taxRate}%`, data.fmt(r.taxAmount), false, hl));
         }
-        children.push(totalLine("Total", data.fmt(data.totals.gross), true));
+        children.push(totalLine("Total", data.fmt(data.totals.gross), true, hl));
         break;
+      }
     }
   }
 
@@ -151,8 +164,9 @@ function muted(text: string) {
   return new Paragraph({ children: [new TextRun({ text, color: MUTED, size: 20 })] });
 }
 
-function totalLine(label: string, value: string, bold = false) {
+function totalLine(label: string, value: string, bold = false, highlight = false) {
   return new Paragraph({
+    ...(highlight ? { shading: highlightShading } : {}),
     children: [
       new TextRun({ text: `${label}: `, bold, size: bold ? 24 : 20 }),
       new TextRun({ text: value, bold, size: bold ? 24 : 20 }),
@@ -190,6 +204,7 @@ function productTable(group: FunctionSheetGroup, fmt: (n: number) => string) {
         children: values.map((v, i) =>
           new TableCell({
             borders: cellBorders,
+            ...(line.changed ? { shading: highlightShading } : {}),
             children: [
               new Paragraph({
                 alignment: i === 0 ? AlignmentType.LEFT : AlignmentType.RIGHT,

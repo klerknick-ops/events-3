@@ -21,6 +21,8 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
       data.description = String(form.get("description")).trim() || null;
     if (form.has("priceNet")) data.priceNet = Number(form.get("priceNet"));
     if (form.has("taxRate")) data.taxRate = Number(form.get("taxRate"));
+    if (form.has("productType"))
+      data.productType = String(form.get("productType")) === "GUEST" ? "GUEST" : "EVENT";
     if (form.has("archived"))
       data.archived = String(form.get("archived")) === "true";
     const image = form.get("image");
@@ -34,6 +36,8 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
     for (const k of ["title", "description", "priceNet", "taxRate", "imageUrl", "archived"]) {
       if (k in body) data[k] = body[k];
     }
+    if ("productType" in body)
+      data.productType = body.productType === "GUEST" ? "GUEST" : "EVENT";
   }
 
   const product = await prisma.product.update({ where: { id }, data });

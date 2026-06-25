@@ -10,6 +10,7 @@ import {
   EmptyState,
   Field,
   Input,
+  Select,
   Spinner,
   Textarea,
 } from "@/components/ui";
@@ -82,11 +83,16 @@ export default function ProductsPage() {
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-medium text-ink">{p.title}</h3>
-                    {p.archived ? (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-ink-muted">
-                        archived
+                    <div className="flex shrink-0 gap-1">
+                      <span className="rounded bg-accent px-1.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-600/20 dark:text-brand-300">
+                        {p.productType === "GUEST" ? "Guest" : "Event"}
                       </span>
-                    ) : null}
+                      {p.archived ? (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-ink-muted">
+                          archived
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   {p.description ? (
                     <p className="mt-1 line-clamp-2 text-xs text-ink-muted">
@@ -184,6 +190,9 @@ function ProductForm({
   const [description, setDescription] = useState(product?.description ?? "");
   const [priceNet, setPriceNet] = useState(product?.priceNet?.toString() ?? "");
   const [taxRate, setTaxRate] = useState(product?.taxRate?.toString() ?? "21");
+  const [productType, setProductType] = useState<"EVENT" | "GUEST">(
+    product?.productType ?? "EVENT",
+  );
   const [preview, setPreview] = useState<string | null>(product?.imageUrl ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
@@ -206,6 +215,7 @@ function ProductForm({
       form.set("description", description);
       form.set("priceNet", String(net));
       form.set("taxRate", String(rate));
+      form.set("productType", productType);
       const file = fileRef.current?.files?.[0];
       if (file) form.set("image", file);
       if (product) await api.form(`/api/products/${product.id}`, form, "PATCH");
@@ -273,6 +283,20 @@ function ProductForm({
               />
             </Field>
           </div>
+          <Field label="Product type">
+            <Select
+              value={productType}
+              onChange={(e) => setProductType(e.target.value as "EVENT" | "GUEST")}
+            >
+              <option value="GUEST">Guest product — quantity from guest count</option>
+              <option value="EVENT">Event product — always quantity 1</option>
+            </Select>
+            <p className="mt-1 text-xs text-ink-muted">
+              {productType === "GUEST"
+                ? "Quantity defaults to the time slot's number of guests when added, and stays adjustable."
+                : "Added once regardless of attendance (e.g. a microphone or screen)."}
+            </p>
+          </Field>
         </div>
 
         <div className="space-y-4">

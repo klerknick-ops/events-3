@@ -11,6 +11,7 @@ export const GET = route(async (req: Request, ctx: { params: Promise<{ id: strin
   const url = new URL(req.url);
   const format = (url.searchParams.get("format") || "pdf").toLowerCase();
   const dayId = url.searchParams.get("day");
+  const highlight = url.searchParams.get("highlight") === "1";
   if (format !== "pdf" && format !== "docx") {
     return badRequest("Unsupported format. Use ?format=pdf or ?format=docx");
   }
@@ -25,6 +26,7 @@ export const GET = route(async (req: Request, ctx: { params: Promise<{ id: strin
     kind: "proforma",
     format: format as DocFormat,
     dayId,
+    highlight,
   });
 
   await logActivity({
