@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import { saveBytes } from "../storage";
 import { fetchInbox, isGraphConfigured, type IncomingMessage } from "./graph";
 
 // ---------------------------------------------------------------------------
@@ -41,7 +42,7 @@ async function upsertIncoming(orgId: string, msg: IncomingMessage): Promise<void
   if (existing) return; // already synced; preserve any manual labels/links
 
   const match = await matchSender(orgId, msg.fromAddress);
-  await prisma.emailMessage.create({
+  const created = await prisma.emailMessage.create({
     data: {
       organizationId: orgId,
       graphId: msg.graphId,
@@ -50,6 +51,7 @@ async function upsertIncoming(orgId: string, msg: IncomingMessage): Promise<void
       fromAddress: msg.fromAddress,
       fromName: msg.fromName,
       toAddresses: msg.toAddresses,
+      ccAddresses: msg.ccAddresses || null,
       subject: msg.subject,
       bodyPreview: msg.bodyPreview,
       body: msg.body,
@@ -60,6 +62,27 @@ async function upsertIncoming(orgId: string, msg: IncomingMessage): Promise<void
       autoMatched: match.autoMatched,
     },
   });
+
+  // Persist attachment bytes into object storage + metadata rows.
+  for (const att of msg.attachments) {
+    let storageKey: string | null = null;
+    if (att.contentBytes) {
+      const buf = Buffer.from(att.contentBytes, "base64");
+      const stored = await saveBytes(buf, att.filename, att.contentType, `${orgId}/email`);
+      storageKey = stored.key;
+    }
+    await prisma.emailAttachment.create({
+      data: {
+        emailMessageId: created.id,
+        filename: att.filename,
+        contentType: att.contentType,
+        size: att.size,
+        storageKey,
+        isInline: att.isInline,
+        contentId: att.contentId,
+      },
+    });
+  }
 }
 
 export interface SyncResult {
@@ -102,6 +125,7 @@ async function seedDemoInbox(orgId: string): Promise<number> {
       fromAddress: (c.email ?? "").toLowerCase(),
       fromName: `${c.firstName} ${c.lastName}`,
       toAddresses: "events@yourvenue.com",
+      ccAddresses: i === 0 ? "assistant@example.com" : "",
       subject:
         i === 0
           ? "Re: Final guest numbers"
@@ -116,10 +140,26 @@ async function seedDemoInbox(orgId: string): Promise<number> {
           : "<p>Hello,</p><p>Could you let me know what time the room will be ready for set-up on the day? We have a florist arriving early.</p>",
       bodyIsHtml: true,
       receivedAt: hours(2 + i * 5),
+      attachments:
+        i === 0
+          ? [
+              {
+                filename: "final-guest-list.csv",
+                contentType: "text/csv",
+                size: 64,
+                contentBytes: Buffer.from(
+                  "name,meal\nSarah Mitchell,veg\nTom Brown,standard\n",
+                ).toString("base64"),
+                isInline: false,
+                contentId: null,
+              },
+            ]
+          : [],
     });
   });
 
   // Vendor / supplier / lead emails with no matching contact.
+  const noExtras = { ccAddresses: "", attachments: [] as IncomingMessage["attachments"] };
   demo.push(
     {
       graphId: "demo-vendor-florist",
@@ -132,6 +172,7 @@ async function seedDemoInbox(orgId: string): Promise<number> {
       body: "<p>Hi team,</p><p>We can deliver the centerpieces between 9 and 11am on Saturday. Please confirm loading-bay access.</p><p>— Bloom Floral</p>",
       bodyIsHtml: true,
       receivedAt: hours(6),
+      ...noExtras,
     },
     {
       graphId: "demo-supplier-av",
@@ -144,6 +185,19 @@ async function seedDemoInbox(orgId: string): Promise<number> {
       body: "<p>Hello,</p><p>Thanks for the enquiry. Here is our quote for the PA and lighting package. Let us know if you'd like to proceed.</p>",
       bodyIsHtml: true,
       receivedAt: hours(20),
+      ccAddresses: "",
+      attachments: [
+        {
+          filename: "av-quote.txt",
+          contentType: "text/plain",
+          size: 48,
+          contentBytes: Buffer.from(
+            "Bright AV — PA + lighting package\nTotal: EUR 450 ex VAT\n",
+          ).toString("base64"),
+          isInline: false,
+          contentId: null,
+        },
+      ],
     },
     {
       graphId: "demo-lead-newcouple",
@@ -156,6 +210,7 @@ async function seedDemoInbox(orgId: string): Promise<number> {
       body: "<p>Hi!</p><p>We're looking for a venue for around 90 guests next April and loved your photos. Do you have availability and a brochure you could share?</p><p>Thanks, Taylor</p>",
       bodyIsHtml: true,
       receivedAt: hours(30),
+      ...noExtras,
     },
   );
 

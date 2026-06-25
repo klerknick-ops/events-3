@@ -5,6 +5,7 @@ export const fullEventInclude = {
   contact: { include: { company: true } },
   template: { select: { id: true, name: true } },
   paymentTerms: true,
+  assignedUser: { select: { id: true, name: true } },
   days: { orderBy: { sortOrder: "asc" } },
   timeSlots: {
     orderBy: { sortOrder: "asc" },

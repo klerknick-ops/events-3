@@ -77,3 +77,32 @@ body {
 .animate-fade-in {
   animation: fade-in 0.15s ease-out;
 }
+
+/* Rendered email bodies — make sanitized HTML look like a mail client without
+   the typography plugin. Scoped to .email-body so it never leaks elsewhere. */
+.email-body {
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.email-body p { margin: 0 0 0.75em; }
+.email-body a { color: var(--brand-600, #4f46e5); text-decoration: underline; }
+.email-body img { max-width: 100%; height: auto; border-radius: 6px; }
+.email-body ul,
+.email-body ol { margin: 0 0 0.75em 1.25em; list-style: revert; }
+.email-body h1,
+.email-body h2,
+.email-body h3 { font-weight: 600; margin: 0 0 0.5em; line-height: 1.25; }
+.email-body h1 { font-size: 1.25rem; }
+.email-body h2 { font-size: 1.1rem; }
+.email-body h3 { font-size: 1rem; }
+.email-body blockquote {
+  margin: 0 0 0.75em;
+  padding-left: 0.75em;
+  border-left: 3px solid var(--border, #e5e7eb);
+  color: var(--ink-muted, #6b7280);
+}
+.email-body table { border-collapse: collapse; max-width: 100%; }
+.email-body td,
+.email-body th { border: 1px solid var(--border, #e5e7eb); padding: 0.35em 0.6em; }
+.email-body hr { border: 0; border-top: 1px solid var(--border, #e5e7eb); margin: 1em 0; }

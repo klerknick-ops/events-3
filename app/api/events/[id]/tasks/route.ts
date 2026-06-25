@@ -18,6 +18,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
   const body = await parseBody(req, schema);
   const task = await prisma.task.create({
     data: {
+      organizationId: orgId,
       eventId: id,
       title: body.title,
       assignee: body.assignee || null,

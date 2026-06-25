@@ -6,6 +6,7 @@ import { requireOrgPermission } from "@/lib/tenant";
 const patchSchema = z.object({
   label: z.enum(["VENDOR", "SUPPLIER"]).nullable().optional(),
   eventId: z.string().nullable().optional(), // manual link/unlink
+  ownerId: z.string().nullable().optional(), // manual owner for lead emails
   isRead: z.boolean().optional(),
 });
 
@@ -38,11 +39,36 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
       data.autoMatched = false;
     }
   }
+  if ("ownerId" in body) {
+    if (body.ownerId) {
+      const owner = await prisma.user.findFirst({
+        where: { id: body.ownerId, organizationId: orgId },
+        select: { id: true },
+      });
+      if (!owner) return badRequest("User not found");
+      data.ownerId = body.ownerId;
+    } else {
+      data.ownerId = null;
+    }
+  }
 
-  const updated = await prisma.emailMessage.update({ where: { id }, data });
+  const updated = await prisma.emailMessage.update({
+    where: { id },
+    data,
+    include: {
+      contact: { select: { id: true, firstName: true, lastName: true } },
+      event: {
+        select: { id: true, title: true, assignedUser: { select: { id: true, name: true } } },
+      },
+      owner: { select: { id: true, name: true } },
+      attachments: { select: { id: true, filename: true, contentType: true, size: true, isInline: true } },
+    },
+  });
   return ok(updated);
 });
 
+// Soft delete: hide from inbox views but keep the row (recoverable/auditable)
+// and do NOT touch the live Microsoft 365 mailbox.
 export const DELETE = route(async (_req: Request, ctx: Ctx) => {
   const { orgId } = await requireOrgPermission("VIEW_GLOBAL_ACTIVITY");
   const { id } = await ctx.params;
@@ -51,6 +77,6 @@ export const DELETE = route(async (_req: Request, ctx: Ctx) => {
     select: { id: true },
   });
   if (!existing) return notFound("Email not found");
-  await prisma.emailMessage.delete({ where: { id } });
+  await prisma.emailMessage.update({ where: { id }, data: { deletedAt: new Date() } });
   return ok({ deleted: true });
 });

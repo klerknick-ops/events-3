@@ -99,6 +99,34 @@ export async function saveImage(
   return { url: urlForKey(key), key };
 }
 
+// Save arbitrary bytes (e.g. an email attachment) preserving the file's
+// extension. Returns the storage key (use /api/files/<key> or a dedicated
+// authenticated route to serve it).
+export async function saveBytes(
+  buffer: Buffer,
+  originalName: string,
+  contentType = "application/octet-stream",
+  prefix = "shared",
+): Promise<{ key: string }> {
+  const ext = safeExt(originalName, "bin");
+  const key = `${prefix}/${crypto.randomUUID()}.${ext}`;
+  if (useR2) {
+    await client().send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    );
+  } else {
+    const full = path.join(LOCAL_DIR, key);
+    await fs.mkdir(path.dirname(full), { recursive: true });
+    await fs.writeFile(full, buffer);
+  }
+  return { key };
+}
+
 export async function deleteImage(url: string | null | undefined): Promise<void> {
   const key = keyFromUrl(url);
   if (!key) return;

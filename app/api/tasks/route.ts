@@ -9,7 +9,7 @@ export const GET = route(async (req) => {
   const status = url.searchParams.get("status"); // "open" | "done" | "all"
   const tasks = await prisma.task.findMany({
     where: {
-      event: { organizationId: orgId },
+      organizationId: orgId,
       ...(status === "done"
         ? { completed: true }
         : status === "all"
@@ -32,6 +32,7 @@ export const GET = route(async (req) => {
           },
         },
       },
+      emailMessage: { select: { id: true, subject: true, fromAddress: true } },
     },
   });
   return ok(tasks);

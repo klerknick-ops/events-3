@@ -170,7 +170,7 @@ async function seedOrganization(cfg: OrgSeed) {
         ],
       },
       roomBookings: { create: [{ roomTypeId: standardRoom.id, quantity: 8, checkIn: at(0, 15), checkOut: at(1, 11) }, { roomTypeId: suite.id, quantity: 1, checkIn: at(0, 15), checkOut: at(2, 11) }] },
-      tasks: { create: [{ title: "Confirm final guest count", assignee: "Coordinator", dueDate: at(-2, 12), completed: true }, { title: "Technical / AV check", assignee: "Tech", dueDate: at(-1, 9) }] },
+      tasks: { create: [{ organizationId: oid, title: "Confirm final guest count", assignee: "Coordinator", dueDate: at(-2, 12), completed: true }, { organizationId: oid, title: "Technical / AV check", assignee: "Tech", dueDate: at(-1, 9) }] },
     },
     include: { timeSlots: { orderBy: { sortOrder: "asc" } } },
   });
@@ -199,7 +199,7 @@ async function seedOrganization(cfg: OrgSeed) {
         contactId: james.id,
         paymentTermsId: fiftyFifty.id,
         timeSlots: { create: [{ label: "Lunch", spaceId: privateDining.id, startsAt: at(0, 12, 0), endsAt: at(0, 14, 0), sortOrder: 1, personCount: 18, setupId: boardroom.id }] },
-        tasks: { create: [{ title: "Confirm final guest count", assignee: "Coordinator", dueDate: at(-3, 12) }] },
+        tasks: { create: [{ organizationId: oid, title: "Confirm final guest count", assignee: "Coordinator", dueDate: at(-3, 12) }] },
       },
       include: { timeSlots: true },
     });

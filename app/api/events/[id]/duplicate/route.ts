@@ -27,6 +27,7 @@ export const POST = route(async (_req: Request, ctx: { params: Promise<{ id: str
         templateId: src.templateId,
         tasks: {
           create: src.tasks.map((t) => ({
+            organizationId: orgId,
             title: t.title,
             assignee: t.assignee,
             dueDate: t.dueDate,

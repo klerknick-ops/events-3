@@ -14,9 +14,13 @@ export const GET = route(async (_req: Request, ctx: { params: Promise<{ id: stri
   if (!event) return notFound("Event not found");
 
   const messages = await prisma.emailMessage.findMany({
-    where: { organizationId: orgId, eventId: id },
+    where: { organizationId: orgId, eventId: id, deletedAt: null },
     orderBy: { receivedAt: "desc" },
-    include: { contact: { select: { id: true, firstName: true, lastName: true } } },
+    include: {
+      contact: { select: { id: true, firstName: true, lastName: true } },
+      owner: { select: { id: true, name: true } },
+      attachments: { select: { id: true, filename: true, contentType: true, size: true, isInline: true } },
+    },
   });
   return ok(messages);
 });

@@ -5,6 +5,8 @@ import { api } from "@/lib/fetcher";
 import type { EmailMessage, EventFull } from "@/lib/types";
 import { Button, Spinner } from "@/components/ui";
 import { ComposeModal } from "@/components/inbox/ComposeModal";
+import { EmailBody } from "@/components/inbox/EmailBody";
+import { AttachmentList } from "@/components/inbox/AttachmentList";
 import { Empty, SectionHeader } from "../PanelBits";
 
 // Emails tied to this event — auto-matched client mail + manually-linked
@@ -23,6 +25,12 @@ export function InboxTab({ event }: { event: EventFull }) {
     });
   }
   useEffect(load, [event.id]);
+
+  async function remove(id: string) {
+    if (!confirm("Remove this email from the event inbox? It can be recovered by an admin.")) return;
+    await api.del(`/api/inbox/${id}`);
+    setEmails((prev) => prev.filter((m) => m.id !== id));
+  }
 
   return (
     <section>
@@ -67,14 +75,21 @@ export function InboxTab({ event }: { event: EventFull }) {
               </button>
               {open === m.id ? (
                 <div className="border-t border-base p-3">
-                  {m.bodyIsHtml ? (
-                    <div
-                      className="max-w-none text-sm text-ink-soft [&_a]:text-brand-600 dark:[&_a]:text-brand-300"
-                      dangerouslySetInnerHTML={{ __html: m.body }}
-                    />
-                  ) : (
-                    <pre className="whitespace-pre-wrap text-sm text-ink-soft">{m.body}</pre>
-                  )}
+                  {m.ccAddresses ? (
+                    <p className="mb-2 text-xs text-ink-muted">Cc: {m.ccAddresses}</p>
+                  ) : null}
+                  <EmailBody html={m.body} isHtml={m.bodyIsHtml} />
+                  {m.attachments && m.attachments.length > 0 ? (
+                    <AttachmentList attachments={m.attachments} className="mt-3" />
+                  ) : null}
+                  <div className="mt-3 text-right">
+                    <button
+                      onClick={() => remove(m.id)}
+                      className="text-xs font-medium text-rose-600 hover:underline"
+                    >
+                      🗑 Delete
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </li>

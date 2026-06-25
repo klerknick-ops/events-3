@@ -168,7 +168,7 @@ export const POST = route(async (req) => {
       notes: body.notes || null,
       timeSlots: { create: slotInputs },
       products: { create: productInputs },
-      tasks: { create: generatedTasks },
+      tasks: { create: generatedTasks.map((t) => ({ ...t, organizationId: orgId })) },
     },
   });
 

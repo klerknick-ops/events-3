@@ -26,6 +26,7 @@ const schema = z.object({
   notes: z.string().nullish(),
   contactId: z.string().optional(),
   paymentTermsId: z.string().nullable().optional(),
+  assignedUserId: z.string().nullable().optional(),
 });
 
 export const PATCH = route(async (req: Request, ctx: Ctx) => {
@@ -54,6 +55,13 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
     });
     if (!pt) return notFound("Payment terms not found");
   }
+  // Validate assigned user (null clears it).
+  if (body.assignedUserId) {
+    const u = await prisma.user.findFirst({
+      where: { id: body.assignedUserId, organizationId: orgId },
+    });
+    if (!u) return notFound("User not found");
+  }
 
   const event = await prisma.event.update({
     where: { id },
@@ -64,6 +72,8 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
       contactId: body.contactId,
       paymentTermsId:
         body.paymentTermsId === undefined ? undefined : body.paymentTermsId,
+      assignedUserId:
+        body.assignedUserId === undefined ? undefined : body.assignedUserId,
     },
     include: fullEventInclude,
   });

@@ -189,7 +189,8 @@ export interface RoomBooking {
 
 export interface Task {
   id: string;
-  eventId: string;
+  eventId: string | null;
+  emailMessageId?: string | null;
   title: string;
   assignee: string | null;
   dueDate: string | null;
@@ -203,7 +204,8 @@ export interface Task {
       lastName: string;
       company: { name: string } | null;
     };
-  };
+  } | null;
+  emailMessage?: { id: string; subject: string; fromAddress: string } | null;
 }
 
 export interface EventNote {
@@ -228,12 +230,21 @@ export interface ActivityEntry {
 
 export type EmailLabel = "VENDOR" | "SUPPLIER";
 
+export interface EmailAttachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  isInline: boolean;
+}
+
 export interface EmailMessage {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
   fromAddress: string;
   fromName: string | null;
   toAddresses: string;
+  ccAddresses: string | null;
   subject: string;
   bodyPreview: string | null;
   body: string;
@@ -244,14 +255,17 @@ export interface EmailMessage {
   contactId: string | null;
   contact?: { id: string; firstName: string; lastName: string } | null;
   eventId: string | null;
-  event?: { id: string; title: string } | null;
+  event?: { id: string; title: string; assignedUser?: { id: string; name: string } | null } | null;
   autoMatched: boolean;
+  ownerId: string | null;
+  owner?: { id: string; name: string } | null;
+  attachments?: EmailAttachment[];
 }
 
 export interface InboxResponse {
   configured: boolean;
   mailbox: string | null;
-  counts: { client: number; leads: number };
+  counts: { client: number; leadsInbox: number; leadsSent: number };
   messages: EmailMessage[];
 }
 
@@ -266,6 +280,8 @@ export interface EventFull {
   template?: { id: string; name: string } | null;
   paymentTermsId: string | null;
   paymentTerms?: PaymentTerms | null;
+  assignedUserId?: string | null;
+  assignedUser?: { id: string; name: string } | null;
   days: EventDay[];
   timeSlots: TimeSlot[];
   products: EventProduct[];

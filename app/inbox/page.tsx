@@ -7,14 +7,21 @@ import { useMe } from "@/components/MeProvider";
 import { Button, Card, EmptyState, Select, Spinner } from "@/components/ui";
 import { ComposeModal } from "@/components/inbox/ComposeModal";
 import { EventLinkSelect } from "@/components/inbox/EventLinkSelect";
+import { EmailBody } from "@/components/inbox/EmailBody";
+import { AttachmentList } from "@/components/inbox/AttachmentList";
+import { OwnerSelect } from "@/components/inbox/OwnerSelect";
 
 type View = "client" | "leads";
+type Folder = "inbox" | "sent";
+
+type EmailPatch = Partial<Pick<EmailMessage, "label" | "eventId" | "isRead" | "ownerId">>;
 
 export default function InboxPage() {
   const { permissions } = useMe();
   const allowed = Boolean(permissions.VIEW_GLOBAL_ACTIVITY);
 
   const [view, setView] = useState<View>("client");
+  const [folder, setFolder] = useState<Folder>("inbox");
   const [data, setData] = useState<InboxResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -23,11 +30,11 @@ export default function InboxPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const r = await api.get<InboxResponse>(`/api/inbox?view=${view}`);
+    const r = await api.get<InboxResponse>(`/api/inbox?view=${view}&folder=${folder}`);
     setData(r);
     setSelected((s) => r.messages.find((m) => m.id === s?.id) ?? r.messages[0] ?? null);
     setLoading(false);
-  }, [view]);
+  }, [view, folder]);
 
   useEffect(() => {
     if (allowed) load();
@@ -44,12 +51,21 @@ export default function InboxPage() {
     }
   }
 
-  async function update(id: string, patch: Partial<Pick<EmailMessage, "label" | "eventId" | "isRead">>) {
+  async function update(id: string, patch: EmailPatch) {
     const updated = await api.patch<EmailMessage>(`/api/inbox/${id}`, patch);
     setData((d) =>
       d ? { ...d, messages: d.messages.map((m) => (m.id === id ? { ...m, ...updated } : m)) } : d,
     );
     setSelected((s) => (s && s.id === id ? { ...s, ...updated } : s));
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Delete this email from the inbox? It can be recovered by an admin and stays in the Microsoft 365 mailbox.")) {
+      return;
+    }
+    await api.del(`/api/inbox/${id}`);
+    setData((d) => (d ? { ...d, messages: d.messages.filter((m) => m.id !== id) } : d));
+    setSelected((s) => (s?.id === id ? null : s));
   }
 
   if (!allowed) {
@@ -59,6 +75,8 @@ export default function InboxPage() {
       </div>
     );
   }
+
+  const leadsCount = (data?.counts.leadsInbox ?? 0) + (data?.counts.leadsSent ?? 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -82,10 +100,18 @@ export default function InboxPage() {
       </div>
 
       {/* View tabs */}
-      <div className="mb-4 flex gap-1 rounded-lg border border-base bg-surface p-1">
+      <div className="mb-3 flex gap-1 rounded-lg border border-base bg-surface p-1">
         <ViewTab active={view === "client"} onClick={() => setView("client")} label="Client Mail" count={data?.counts.client} />
-        <ViewTab active={view === "leads"} onClick={() => setView("leads")} label="Leads & Vendors" count={data?.counts.leads} />
+        <ViewTab active={view === "leads"} onClick={() => setView("leads")} label="Leads & Vendors" count={leadsCount} />
       </div>
+
+      {/* Inbox / Sent sub-folders (Leads & Vendors only) */}
+      {view === "leads" ? (
+        <div className="mb-4 flex gap-1 text-sm">
+          <FolderTab active={folder === "inbox"} onClick={() => setFolder("inbox")} label="Inbox" count={data?.counts.leadsInbox} />
+          <FolderTab active={folder === "sent"} onClick={() => setFolder("sent")} label="Sent" count={data?.counts.leadsSent} />
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="flex justify-center py-16 text-ink-muted">
@@ -94,52 +120,66 @@ export default function InboxPage() {
       ) : !data || data.messages.length === 0 ? (
         <EmptyState
           icon="📨"
-          title={view === "client" ? "No client mail yet" : "No leads or vendor mail yet"}
+          title={view === "client" ? "No client mail yet" : folder === "sent" ? "No sent mail yet" : "No leads or vendor mail yet"}
           description={
             view === "client"
               ? "Emails from clients with an event will appear here automatically after a sync."
-              : "Vendor, supplier and new-lead emails land here. Tag them and link them to an event."
+              : folder === "sent"
+                ? "Emails you send to leads (with no event yet) are filed here."
+                : "Vendor, supplier and new-lead emails land here. Tag them, assign an owner and link them to an event."
           }
-          action={<Button onClick={sync}>↻ Sync now</Button>}
+          action={folder === "sent" ? undefined : <Button onClick={sync}>↻ Sync now</Button>}
         />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
           {/* Message list */}
           <div className="space-y-2">
-            {data.messages.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setSelected(m)}
-                className={
-                  "block w-full rounded-xl border p-3 text-left transition " +
-                  (selected?.id === m.id
-                    ? "border-brand-500 bg-accent/60 dark:bg-brand-600/10"
-                    : "border-base bg-surface hover:border-brand-300")
-                }
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-ink">
-                    {m.direction === "OUTBOUND" ? `To: ${m.toAddresses}` : m.fromName || m.fromAddress}
-                  </span>
-                  <span className="shrink-0 text-[11px] text-ink-muted">
-                    {new Date(m.receivedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                </div>
-                <div className="truncate text-sm text-ink-soft">{m.subject}</div>
-                <div className="truncate text-xs text-ink-muted">{m.bodyPreview}</div>
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {m.label ? <Tag>{m.label === "VENDOR" ? "Vendor" : "Supplier"}</Tag> : null}
-                  {m.event ? <Tag tone="brand">{m.autoMatched ? "↪ " : "🔗 "}{m.event.title}</Tag> : null}
-                  {m.direction === "OUTBOUND" ? <Tag tone="muted">Sent</Tag> : null}
-                </div>
-              </button>
-            ))}
+            {data.messages.map((m) => {
+              const owner = m.event?.assignedUser?.name ?? m.owner?.name ?? null;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => setSelected(m)}
+                  className={
+                    "block w-full rounded-xl border p-3 text-left transition " +
+                    (selected?.id === m.id
+                      ? "border-brand-500 bg-accent/60 dark:bg-brand-600/10"
+                      : "border-base bg-surface hover:border-brand-300")
+                  }
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-medium text-ink">
+                      {m.direction === "OUTBOUND" ? `To: ${m.toAddresses}` : m.fromName || m.fromAddress}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-ink-muted">
+                      {new Date(m.receivedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                  <div className="truncate text-sm text-ink-soft">{m.subject}</div>
+                  <div className="truncate text-xs text-ink-muted">{m.bodyPreview}</div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                    {m.label ? <Tag>{m.label === "VENDOR" ? "Vendor" : "Supplier"}</Tag> : null}
+                    {m.event ? <Tag tone="brand">{m.autoMatched ? "↪ " : "🔗 "}{m.event.title}</Tag> : null}
+                    {m.direction === "OUTBOUND" ? <Tag tone="muted">Sent</Tag> : null}
+                    {m.attachments && m.attachments.length > 0 ? <Tag tone="muted">📎 {m.attachments.length}</Tag> : null}
+                    {owner ? <Tag tone="muted">👤 {owner}</Tag> : null}
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           {/* Reading pane */}
           <div>
             {selected ? (
-              <MessagePane key={selected.id} message={selected} view={view} onUpdate={update} onReply={() => setCompose(true)} />
+              <MessagePane
+                key={selected.id}
+                message={selected}
+                view={view}
+                onUpdate={update}
+                onDelete={remove}
+                onReply={() => setCompose(true)}
+              />
             ) : (
               <Card className="p-8 text-center text-sm text-ink-muted">Select a message.</Card>
             )}
@@ -166,13 +206,16 @@ function MessagePane({
   message,
   view,
   onUpdate,
+  onDelete,
   onReply,
 }: {
   message: EmailMessage;
   view: View;
-  onUpdate: (id: string, patch: Partial<Pick<EmailMessage, "label" | "eventId" | "isRead">>) => Promise<void>;
+  onUpdate: (id: string, patch: EmailPatch) => Promise<void>;
+  onDelete: (id: string) => void;
   onReply: () => void;
 }) {
+  const eventOwner = message.event?.assignedUser?.name ?? null;
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -183,16 +226,22 @@ function MessagePane({
             <span className="font-medium">{message.fromName || message.fromAddress}</span>
             {message.direction === "INBOUND" ? ` <${message.fromAddress}>` : ` ${message.toAddresses}`}
           </p>
-          <p className="text-xs text-ink-muted">
-            {new Date(message.receivedAt).toLocaleString()}
-          </p>
+          {message.ccAddresses ? (
+            <p className="text-xs text-ink-muted">Cc: {message.ccAddresses}</p>
+          ) : null}
+          <p className="text-xs text-ink-muted">{new Date(message.receivedAt).toLocaleString()}</p>
         </div>
-        <Button size="sm" variant="secondary" onClick={onReply}>
-          ↩ Reply
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button size="sm" variant="secondary" onClick={onReply}>
+            ↩ Reply
+          </Button>
+          <Button size="sm" variant="danger" onClick={() => onDelete(message.id)}>
+            🗑 Delete
+          </Button>
+        </div>
       </div>
 
-      {/* Tagging + linking controls (Leads & Vendors) */}
+      {/* Tagging + linking + owner controls (Leads & Vendors) */}
       {view === "leads" ? (
         <div className="mb-4 grid gap-3 rounded-lg border border-base bg-surface-2 p-3 sm:grid-cols-2">
           <div>
@@ -215,24 +264,40 @@ function MessagePane({
               onChange={(id) => onUpdate(message.id, { eventId: id })}
             />
           </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-ink-muted">Owner</label>
+            {message.event ? (
+              <p className="text-sm text-ink-soft">
+                {eventOwner ? (
+                  <>Owned by <span className="font-medium text-ink">{eventOwner}</span> (event assignee)</>
+                ) : (
+                  "This email is linked to an event — set the event's assignee to give it an owner."
+                )}
+              </p>
+            ) : (
+              <OwnerSelect
+                value={message.ownerId}
+                onChange={(id) => onUpdate(message.id, { ownerId: id })}
+              />
+            )}
+          </div>
         </div>
       ) : message.event ? (
         <div className="mb-4 rounded-lg border border-base bg-surface-2 p-3 text-sm text-ink-soft">
           {message.autoMatched ? "Auto-matched to " : "Linked to "}
           <span className="font-medium text-ink">{message.event.title}</span>
           {message.contact ? ` · ${message.contact.firstName} ${message.contact.lastName}` : ""}
+          {eventOwner ? <span className="text-ink-muted"> · 👤 {eventOwner}</span> : null}
         </div>
       ) : null}
 
       {/* Body */}
-      {message.bodyIsHtml ? (
-        <div
-          className="prose-email max-w-none text-sm text-ink-soft [&_a]:text-brand-600 dark:[&_a]:text-brand-300"
-          dangerouslySetInnerHTML={{ __html: message.body }}
-        />
-      ) : (
-        <pre className="whitespace-pre-wrap text-sm text-ink-soft">{message.body}</pre>
-      )}
+      <EmailBody html={message.body} isHtml={message.bodyIsHtml} />
+
+      {/* Attachments */}
+      {message.attachments && message.attachments.length > 0 ? (
+        <AttachmentList attachments={message.attachments} className="mt-4" />
+      ) : null}
     </Card>
   );
 }
@@ -258,6 +323,31 @@ function ViewTab({
     >
       {label}
       {typeof count === "number" ? <span className="ml-1.5 text-xs text-ink-muted">({count})</span> : null}
+    </button>
+  );
+}
+
+function FolderTab({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count?: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "rounded-md px-3 py-1 font-medium transition-colors " +
+        (active ? "bg-muted text-ink" : "text-ink-muted hover:text-ink")
+      }
+    >
+      {label}
+      {typeof count === "number" ? <span className="ml-1 text-xs text-ink-muted">({count})</span> : null}
     </button>
   );
 }

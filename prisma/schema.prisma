@@ -38,6 +38,7 @@ model Organization {
   paymentTerms  PaymentTerms[]
   generatedDocs GeneratedDocument[]
   emails        EmailMessage[]
+  tasks         Task[]
 }
 
 // ---------- Users & auth ----------
@@ -55,9 +56,11 @@ model User {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  sessions   Session[]
-  activities ActivityLog[]
-  notes      EventNote[]
+  sessions       Session[]
+  activities     ActivityLog[]
+  notes          EventNote[]
+  ownedEmails    EmailMessage[] @relation("EmailOwner")
+  assignedEvents Event[]        @relation("EventAssignee")
 
   @@index([organizationId])
 }
@@ -326,6 +329,8 @@ model Event {
   template       EventTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   paymentTermsId String?
   paymentTerms   PaymentTerms?  @relation(fields: [paymentTermsId], references: [id], onDelete: SetNull)
+  assignedUserId String?
+  assignedUser   User?          @relation("EventAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -378,6 +383,7 @@ model EmailMessage {
   fromAddress    String
   fromName       String?
   toAddresses    String       // comma-separated recipients
+  ccAddresses    String?      // comma-separated CC recipients
   subject        String
   bodyPreview    String?
   body           String       @default("")
@@ -390,12 +396,36 @@ model EmailMessage {
   eventId        String?
   event          Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
   autoMatched    Boolean      @default(false) // event link came from a contact match
+  ownerId        String?      // manually-assigned owner for lead emails (no event)
+  owner          User?        @relation("EmailOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  deletedAt      DateTime?    // soft delete — hidden from views, kept for audit/recovery
   createdAt      DateTime     @default(now())
+
+  attachments EmailAttachment[]
+  tasks       Task[]
 
   @@unique([organizationId, graphId])
   @@index([organizationId])
   @@index([eventId])
   @@index([contactId])
+}
+
+// A file attached to an email (sent or received). The bytes live in object
+// storage (R2 / dev uploads) keyed by storageKey; served via /api/files.
+model EmailAttachment {
+  id             String       @id @default(cuid())
+  emailMessageId String
+  email          EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  filename       String
+  contentType    String       @default("application/octet-stream")
+  size           Int          @default(0)
+  storageKey     String?      // object-storage key (null if only a Graph reference)
+  graphAttachmentId String?   // Graph attachment id (for lazy fetch from M365)
+  isInline       Boolean      @default(false)
+  contentId      String?      // cid: for inline images
+  createdAt      DateTime     @default(now())
+
+  @@index([emailMessageId])
 }
 
 // A single calendar day within an event. Single-day events have exactly one
@@ -468,17 +498,26 @@ model EventProduct {
 }
 
 model Task {
-  id        String   @id @default(cuid())
-  eventId   String
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  title     String
-  assignee  String?
-  dueDate   DateTime?
-  completed Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Event is optional: a task can be a standalone lead follow-up (e.g. created
+  // from an email before any event exists).
+  eventId        String?
+  event          Event?        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  // Optional source email. SetNull so the task survives if the email is deleted.
+  emailMessageId String?
+  emailMessage   EmailMessage? @relation(fields: [emailMessageId], references: [id], onDelete: SetNull)
+  title          String
+  assignee       String?
+  dueDate        DateTime?
+  completed      Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
+  @@index([organizationId])
   @@index([eventId])
+  @@index([emailMessageId])
   @@index([dueDate])
 }
 

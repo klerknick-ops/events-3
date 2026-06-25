@@ -163,7 +163,11 @@ export default function TasksPage() {
                                 `${t.event.contact.firstName} ${t.event.contact.lastName}`}
                             </span>
                           </>
-                        ) : null}
+                        ) : t.emailMessage ? (
+                          <span className="truncate">✉ {t.emailMessage.subject || "Email follow-up"}</span>
+                        ) : (
+                          <span className="truncate">Lead follow-up</span>
+                        )}
                         {t.assignee ? <span>· {t.assignee}</span> : null}
                       </div>
                     </div>

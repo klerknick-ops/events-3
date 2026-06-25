@@ -23,6 +23,7 @@ import { RoomsTab } from "./tabs/RoomsTab";
 import { NotesTab } from "./tabs/NotesTab";
 import { InboxTab } from "./tabs/InboxTab";
 import { ActivityTab } from "./tabs/ActivityTab";
+import { OwnerSelect } from "@/components/inbox/OwnerSelect";
 import { ExportMenu } from "./ExportMenu";
 
 type TabKey = "schedule" | "products" | "rooms" | "tasks" | "notes" | "inbox" | "activity";
@@ -150,7 +151,7 @@ export function EventDetailPanel({
             );
           })}
         </div>
-        <div className="mt-2">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <PaymentTermsSelect
             value={event.paymentTermsId}
             onChange={async (id) => {
@@ -158,6 +159,18 @@ export function EventDetailPanel({
               reload();
             }}
           />
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-ink-muted">
+              Assigned to
+            </label>
+            <OwnerSelect
+              value={event.assignedUserId ?? null}
+              onChange={async (id) => {
+                await api.patch(`/api/events/${eventId}`, { assignedUserId: id });
+                reload();
+              }}
+            />
+          </div>
         </div>
       </div>
 
