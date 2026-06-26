@@ -10,8 +10,10 @@ const schema = z.object({
   quantity: z.coerce.number().int().positive().optional(),
   dayId: z.string().nullable().optional(),
   slotId: z.string().nullable().optional(),
+  nameOverride: z.string().nullable().optional(),
   unitPriceNetOverride: z.coerce.number().min(0).nullable().optional(),
   taxRateOverride: z.coerce.number().min(0).nullable().optional(),
+  notes: z.string().nullable().optional(),
 });
 
 export const PATCH = route(async (req: Request, ctx: Ctx) => {

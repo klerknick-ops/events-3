@@ -8,9 +8,17 @@ type Ctx = { params: Promise<{ id: string }> };
 
 const schema = z.object({
   title: z.string().min(1).optional(),
-  defaultAssignee: z.string().trim().nullable().optional(),
+  assignedUserId: z.string().nullable().optional(),
+  triggerType: z.enum(["RELATIVE", "RECURRING", "ACTION"]).optional(),
   offsetDays: z.coerce.number().int().min(0).optional(),
   basis: z.enum(TASK_DEADLINE_BASES).optional(),
+  recurrenceFreq: z.enum(["WEEKLY", "MONTHLY"]).nullable().optional(),
+  recurrenceWeekday: z.coerce.number().int().min(0).max(6).nullable().optional(),
+  recurrenceDay: z.coerce.number().int().min(1).max(31).nullable().optional(),
+  recurrenceOrdinal: z.coerce.number().int().min(-1).max(5).nullable().optional(),
+  actionType: z.enum(["EMAIL_RECEIVED", "EMAIL_SENT", "STATUS_CHANGE"]).nullable().optional(),
+  actionStatus: z.string().nullable().optional(),
+  leadDays: z.coerce.number().int().min(0).optional(),
 });
 
 export const PATCH = route(async (req: Request, ctx: Ctx) => {

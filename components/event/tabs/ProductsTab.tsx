@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { api } from "@/lib/fetcher";
-import type { EventFull, TimeSlot } from "@/lib/types";
+import type { EventFull, EventProduct, TimeSlot } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/dates";
 import { computeEventTotals } from "@/lib/event-helpers";
-import { Button } from "@/components/ui";
+import { Button, Field, Input } from "@/components/ui";
 import { Empty, MoneyRow, QtyEditor } from "../PanelBits";
 import { ProductPicker } from "../ProductPicker";
 
@@ -23,6 +23,8 @@ export function ProductsTab({
   reload: () => void;
 }) {
   const [pickerSlot, setPickerSlot] = useState<TimeSlot | null>(null);
+  const [editLineId, setEditLineId] = useState<string | null>(null);
+  const productById = new Map(event.products.map((p) => [p.id, p]));
 
   const multiDay = event.days.length > 1;
   const day = event.days.find((d) => d.id === selectedDayId) ?? event.days[0];
@@ -81,36 +83,67 @@ export function ProductsTab({
                 <p className="px-3 py-3 text-sm text-ink-muted">No products on this slot yet.</p>
               ) : (
                 <div className="divide-y divide-base">
-                  {slotLines.map((l) => (
-                    <div key={l.id} className="flex items-center gap-2 px-3 py-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-ink">{l.title}</div>
-                        <div className="text-xs text-ink-muted">
-                          {formatMoney(l.unitNet)} net · {l.taxRate}% tax
+                  {slotLines.map((l) => {
+                    const ep = productById.get(l.id);
+                    return (
+                      <div key={l.id}>
+                        <div className="flex items-center gap-2 px-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-ink">
+                              {l.title}
+                              {ep?.nameOverride ? (
+                                <span className="ml-1 text-xs font-normal text-ink-muted">(renamed)</span>
+                              ) : null}
+                            </div>
+                            <div className="text-xs text-ink-muted">
+                              {formatMoney(l.unitNet)} net · {l.taxRate}% tax
+                              {ep?.unitPriceNetOverride != null ? " · price overridden" : ""}
+                            </div>
+                            {l.note ? (
+                              <div className="mt-0.5 text-xs italic text-ink-muted">📝 {l.note}</div>
+                            ) : null}
+                          </div>
+                          <QtyEditor
+                            value={l.quantity}
+                            onChange={async (q) => {
+                              await api.patch(`/api/event-products/${l.id}`, { quantity: q });
+                              reload();
+                            }}
+                          />
+                          <div className="w-20 text-right text-sm font-medium text-ink">
+                            {formatMoney(l.totals.gross)}
+                          </div>
+                          <button
+                            className="text-ink-muted hover:text-ink"
+                            onClick={() => setEditLineId((id) => (id === l.id ? null : l.id))}
+                            title="Edit name / price / note"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            className="text-ink-muted hover:text-rose-600"
+                            onClick={async () => {
+                              await api.del(`/api/event-products/${l.id}`);
+                              reload();
+                            }}
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
                         </div>
+                        {editLineId === l.id && ep ? (
+                          <LineOverrideEditor
+                            ep={ep}
+                            onClose={() => setEditLineId(null)}
+                            onSaved={() => {
+                              setEditLineId(null);
+                              reload();
+                            }}
+                          />
+                        ) : null}
                       </div>
-                      <QtyEditor
-                        value={l.quantity}
-                        onChange={async (q) => {
-                          await api.patch(`/api/event-products/${l.id}`, { quantity: q });
-                          reload();
-                        }}
-                      />
-                      <div className="w-20 text-right text-sm font-medium text-ink">
-                        {formatMoney(l.totals.gross)}
-                      </div>
-                      <button
-                        className="text-ink-muted hover:text-rose-600"
-                        onClick={async () => {
-                          await api.del(`/api/event-products/${l.id}`);
-                          reload();
-                        }}
-                        title="Remove"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -186,5 +219,70 @@ export function ProductsTab({
         />
       ) : null}
     </section>
+  );
+}
+
+// Per-line overrides for this booking only: rename, override net price, and a
+// note (rendered on documents). Leaving name/price blank clears the override
+// and falls back to the master catalog product.
+function LineOverrideEditor({
+  ep,
+  onClose,
+  onSaved,
+}: {
+  ep: EventProduct;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(ep.nameOverride ?? "");
+  const [price, setPrice] = useState(
+    ep.unitPriceNetOverride != null ? String(ep.unitPriceNetOverride) : "",
+  );
+  const [note, setNote] = useState(ep.notes ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.patch(`/api/event-products/${ep.id}`, {
+        nameOverride: name.trim() || null,
+        unitPriceNetOverride: price.trim() === "" ? null : Number(price),
+        notes: note.trim() || null,
+      });
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 border-t border-base bg-surface-2 px-3 py-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={`Name override (default: ${ep.product.title})`}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={ep.product.title} />
+        </Field>
+        <Field label={`Net price override (default: ${formatMoney(ep.product.priceNet)})`}>
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder={String(ep.product.priceNet)}
+          />
+        </Field>
+      </div>
+      <Field label="Note (shown on documents)">
+        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. no nuts, gluten-free" />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </div>
   );
 }

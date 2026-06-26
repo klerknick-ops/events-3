@@ -3,6 +3,7 @@ import { badRequest, created, route } from "@/lib/api";
 import { requireOrgPermission } from "@/lib/tenant";
 import { sendMail, type OutgoingAttachment } from "@/lib/mail/graph";
 import { saveBytes } from "@/lib/storage";
+import { runActionRules } from "@/lib/action-tasks";
 
 // Compose & send through the connected mailbox. Accepts multipart/form-data so
 // attachments can be uploaded. Supports CC, attachments, optional event link and
@@ -22,7 +23,7 @@ export const POST = route(async (req) => {
   const eventIdRaw = String(form.get("eventId") || "").trim();
   const taskTitle = String(form.get("taskTitle") || "").trim();
   const taskDueDate = String(form.get("taskDueDate") || "").trim();
-  const taskAssignee = String(form.get("taskAssignee") || "").trim();
+  const taskAssigneeId = String(form.get("taskAssigneeId") || "").trim();
 
   const recipients = to.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
   const ccList = cc.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
@@ -99,11 +100,20 @@ export const POST = route(async (req) => {
         eventId,
         emailMessageId: message.id,
         title: taskTitle,
-        assignee: taskAssignee || null,
+        // Default the follow-up task's assignee to the sender (Phase 6 §5).
+        assignedUserId: taskAssigneeId || user.id,
         dueDate: new Date(taskDueDate),
       },
     });
   }
+
+  // Action-based task rules: an email was sent (Phase 6, Section 7).
+  await runActionRules({
+    orgId,
+    actionType: "EMAIL_SENT",
+    eventId,
+    emailMessageId: message.id,
+  });
 
   return created({ sent: result.sent, message, task, by: user.id });
 });

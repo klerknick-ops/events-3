@@ -10,11 +10,14 @@ import { EventLinkSelect } from "@/components/inbox/EventLinkSelect";
 import { EmailBody } from "@/components/inbox/EmailBody";
 import { AttachmentList } from "@/components/inbox/AttachmentList";
 import { OwnerSelect } from "@/components/inbox/OwnerSelect";
+import { buildReply, buildForward, type ComposePreset } from "@/components/inbox/quote";
 
 type View = "client" | "leads";
 type Folder = "inbox" | "sent";
 
-type EmailPatch = Partial<Pick<EmailMessage, "label" | "eventId" | "isRead" | "ownerId">>;
+type EmailPatch = Partial<Pick<EmailMessage, "label" | "eventId" | "isRead" | "ownerId">> & {
+  archived?: boolean;
+};
 
 export default function InboxPage() {
   const { permissions } = useMe();
@@ -22,19 +25,22 @@ export default function InboxPage() {
 
   const [view, setView] = useState<View>("client");
   const [folder, setFolder] = useState<Folder>("inbox");
+  const [archived, setArchived] = useState(false);
   const [data, setData] = useState<InboxResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [selected, setSelected] = useState<EmailMessage | null>(null);
-  const [compose, setCompose] = useState(false);
+  const [compose, setCompose] = useState<ComposePreset | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const r = await api.get<InboxResponse>(`/api/inbox?view=${view}&folder=${folder}`);
+    const r = await api.get<InboxResponse>(
+      `/api/inbox?view=${view}&folder=${folder}${archived ? "&archived=1" : ""}`,
+    );
     setData(r);
     setSelected((s) => r.messages.find((m) => m.id === s?.id) ?? r.messages[0] ?? null);
     setLoading(false);
-  }, [view, folder]);
+  }, [view, folder, archived]);
 
   useEffect(() => {
     if (allowed) load();
@@ -68,6 +74,17 @@ export default function InboxPage() {
     setSelected((s) => (s?.id === id ? null : s));
   }
 
+  async function archive(id: string, value: boolean) {
+    try {
+      await api.patch(`/api/inbox/${id}`, { archived: value });
+      // It moves out of the current list (active ⇄ archived).
+      setData((d) => (d ? { ...d, messages: d.messages.filter((m) => m.id !== id) } : d));
+      setSelected((s) => (s?.id === id ? null : s));
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
+
   if (!allowed) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10">
@@ -93,7 +110,14 @@ export default function InboxPage() {
           <Button variant="secondary" size="sm" onClick={sync} disabled={syncing}>
             {syncing ? "Syncing…" : "↻ Sync"}
           </Button>
-          <Button size="sm" onClick={() => setCompose(true)}>
+          <Button
+            variant={archived ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setArchived((a) => !a)}
+          >
+            🗄 Archived{data?.counts.archived ? ` (${data.counts.archived})` : ""}
+          </Button>
+          <Button size="sm" onClick={() => setCompose({})}>
             ✎ Compose
           </Button>
         </div>
@@ -106,7 +130,7 @@ export default function InboxPage() {
       </div>
 
       {/* Inbox / Sent sub-folders (Leads & Vendors only) */}
-      {view === "leads" ? (
+      {view === "leads" && !archived ? (
         <div className="mb-4 flex gap-1 text-sm">
           <FolderTab active={folder === "inbox"} onClick={() => setFolder("inbox")} label="Inbox" count={data?.counts.leadsInbox} />
           <FolderTab active={folder === "sent"} onClick={() => setFolder("sent")} label="Sent" count={data?.counts.leadsSent} />
@@ -178,7 +202,9 @@ export default function InboxPage() {
                 view={view}
                 onUpdate={update}
                 onDelete={remove}
-                onReply={() => setCompose(true)}
+                onArchive={archive}
+                onReply={() => setCompose(buildReply(selected))}
+                onForward={() => setCompose(buildForward(selected))}
               />
             ) : (
               <Card className="p-8 text-center text-sm text-ink-muted">Select a message.</Card>
@@ -189,11 +215,13 @@ export default function InboxPage() {
 
       {compose ? (
         <ComposeModal
-          presetEventId={selected?.eventId ?? null}
-          presetTo={selected && selected.direction === "INBOUND" ? selected.fromAddress : undefined}
-          onClose={() => setCompose(false)}
+          presetEventId={compose.eventId ?? selected?.eventId ?? null}
+          presetTo={compose.to}
+          presetSubject={compose.subject}
+          presetBody={compose.body}
+          onClose={() => setCompose(null)}
           onSent={() => {
-            setCompose(false);
+            setCompose(null);
             load();
           }}
         />
@@ -207,15 +235,21 @@ function MessagePane({
   view,
   onUpdate,
   onDelete,
+  onArchive,
   onReply,
+  onForward,
 }: {
   message: EmailMessage;
   view: View;
   onUpdate: (id: string, patch: EmailPatch) => Promise<void>;
   onDelete: (id: string) => void;
+  onArchive: (id: string, value: boolean) => void;
   onReply: () => void;
+  onForward: () => void;
 }) {
   const eventOwner = message.event?.assignedUser?.name ?? null;
+  const isArchived = Boolean(message.archivedAt);
+  const canArchive = Boolean(message.eventId || message.contactId);
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -231,10 +265,22 @@ function MessagePane({
           ) : null}
           <p className="text-xs text-ink-muted">{new Date(message.receivedAt).toLocaleString()}</p>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <Button size="sm" variant="secondary" onClick={onReply}>
             ↩ Reply
           </Button>
+          <Button size="sm" variant="secondary" onClick={onForward}>
+            ➡ Forward
+          </Button>
+          {isArchived ? (
+            <Button size="sm" variant="secondary" onClick={() => onArchive(message.id, false)}>
+              ↩ Unarchive
+            </Button>
+          ) : canArchive ? (
+            <Button size="sm" variant="secondary" onClick={() => onArchive(message.id, true)}>
+              🗄 Archive
+            </Button>
+          ) : null}
           <Button size="sm" variant="danger" onClick={() => onDelete(message.id)}>
             🗑 Delete
           </Button>

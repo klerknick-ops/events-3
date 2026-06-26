@@ -17,6 +17,7 @@ const schema = z.object({
   setupTableCount: z.coerce.number().int().min(0).nullish(),
   setupHeadTables: z.boolean().optional(),
   setupManual: z.boolean().optional(),
+  notes: z.string().nullish(),
   force: z.boolean().optional(),
 });
 
@@ -68,6 +69,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
       endsAt,
       sortOrder: count,
       personCount,
+      notes: body.notes || null,
       ...setupFields,
     },
     include: { space: true },

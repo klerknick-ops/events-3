@@ -101,6 +101,9 @@ export async function renderDocDocx(
                 children: [
                   new TextRun({ text: `${s.label}: `, bold: true, size: 20 }),
                   new TextRun({ text: s.range, size: 20, color: MUTED }),
+                  ...(s.note
+                    ? [new TextRun({ text: `  — Note: ${s.note}`, italics: true, size: 18, color: MUTED })]
+                    : []),
                 ],
               }),
             );
@@ -210,6 +213,15 @@ function productTable(group: FunctionSheetGroup, fmt: (n: number) => string) {
                 alignment: i === 0 ? AlignmentType.LEFT : AlignmentType.RIGHT,
                 children: [new TextRun({ text: v, size: 18, bold: i === 4 })],
               }),
+              ...(i === 0 && line.note
+                ? [
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: `Note: ${line.note}`, italics: true, size: 16, color: MUTED }),
+                      ],
+                    }),
+                  ]
+                : []),
             ],
           }),
         ),

@@ -1,5 +1,6 @@
 import { prisma } from "../db";
 import { saveBytes } from "../storage";
+import { runActionRules } from "../action-tasks";
 import { fetchInbox, isGraphConfigured, type IncomingMessage } from "./graph";
 
 // ---------------------------------------------------------------------------
@@ -83,6 +84,14 @@ async function upsertIncoming(orgId: string, msg: IncomingMessage): Promise<void
       },
     });
   }
+
+  // Action-based task rules: an email was received (Phase 6, Section 7).
+  await runActionRules({
+    orgId,
+    actionType: "EMAIL_RECEIVED",
+    eventId: match.eventId,
+    emailMessageId: created.id,
+  });
 }
 
 export interface SyncResult {

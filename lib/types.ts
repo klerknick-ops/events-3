@@ -94,12 +94,38 @@ export interface Contact {
   _count?: { events: number };
 }
 
+export type NotificationTargetType = "SPACE" | "PRODUCT" | "SETUP";
+
+export interface NotificationRule {
+  id: string;
+  targetType: NotificationTargetType;
+  message: string;
+  minPersons: number | null;
+  productId: string | null;
+  setupId: string | null;
+  active: boolean;
+  spaces: { spaceId: string; space?: { id: string; name: string } }[];
+}
+
+export type TaskTriggerType = "RELATIVE" | "RECURRING" | "ACTION";
+export type TaskRecurrenceFreq = "WEEKLY" | "MONTHLY";
+export type TaskActionType = "EMAIL_RECEIVED" | "EMAIL_SENT" | "STATUS_CHANGE";
+
 export interface TaskTemplate {
   id: string;
   title: string;
   defaultAssignee: string | null;
+  assignedUserId: string | null;
+  triggerType: TaskTriggerType;
   offsetDays: number;
   basis: TaskDeadlineBasis;
+  recurrenceFreq: TaskRecurrenceFreq | null;
+  recurrenceWeekday: number | null;
+  recurrenceDay: number | null;
+  recurrenceOrdinal: number | null;
+  actionType: TaskActionType | null;
+  actionStatus: string | null;
+  leadDays: number;
 }
 
 export interface TemplateSlot {
@@ -111,6 +137,7 @@ export interface TemplateSlot {
   durationMin: number;
   dayOffset: number;
   sortOrder: number;
+  products?: TemplateProduct[];
 }
 
 export interface TemplateProduct {
@@ -118,6 +145,7 @@ export interface TemplateProduct {
   productId: string;
   product: Product;
   quantity: number;
+  templateSlotId?: string | null;
 }
 
 export interface TemplateTask {
@@ -162,6 +190,7 @@ export interface TimeSlot {
   setupTableCount: number | null;
   setupHeadTables: boolean;
   setupManual: boolean;
+  notes: string | null;
 }
 
 export interface EventProduct {
@@ -172,8 +201,10 @@ export interface EventProduct {
   slotId: string | null;
   slot?: TimeSlot | null;
   quantity: number;
+  nameOverride: string | null;
   unitPriceNetOverride: number | null;
   taxRateOverride: number | null;
+  notes: string | null;
 }
 
 export interface RoomBooking {
@@ -193,6 +224,8 @@ export interface Task {
   emailMessageId?: string | null;
   title: string;
   assignee: string | null;
+  assignedUserId?: string | null;
+  assignedUser?: { id: string; name: string } | null;
   dueDate: string | null;
   completed: boolean;
   event?: {
@@ -259,13 +292,14 @@ export interface EmailMessage {
   autoMatched: boolean;
   ownerId: string | null;
   owner?: { id: string; name: string } | null;
+  archivedAt?: string | null;
   attachments?: EmailAttachment[];
 }
 
 export interface InboxResponse {
   configured: boolean;
   mailbox: string | null;
-  counts: { client: number; leadsInbox: number; leadsSent: number };
+  counts: { client: number; leadsInbox: number; leadsSent: number; archived: number };
   messages: EmailMessage[];
 }
 

@@ -107,9 +107,12 @@ function renderSchedule(doc: PDFKit.PDFDocument, data: FunctionSheetData) {
     ensureSpace(doc, 24);
     const left = doc.page.margins.left;
     const cw = doc.page.width - doc.page.margins.right - left;
-    if (s.changed) highlightRect(doc, left - 2, doc.y - 2, cw + 4, 26);
+    if (s.changed) highlightRect(doc, left - 2, doc.y - 2, cw + 4, s.note ? 40 : 26);
     doc.fillColor(INK).font("Helvetica-Bold").fontSize(10).text(s.label);
     doc.fillColor(MUTED).font("Helvetica").fontSize(9.5).text(s.range);
+    if (s.note) {
+      doc.fillColor(MUTED).font("Helvetica-Oblique").fontSize(9).text(`Note: ${s.note}`, { width: cw });
+    }
     doc.moveDown(0.15);
   }
 }
@@ -163,6 +166,9 @@ function renderProductTable(
       doc.fillColor(MUTED).text(`${line.taxRate}%`, cols.tax, rowY, { width: contentWidth * 0.1, align: "right" });
       doc.fillColor(INK).font("Helvetica-Bold").text(data.fmt(line.gross), cols.total, rowY, { width: contentWidth * 0.12, align: "right" });
       doc.y = rowY + rowH;
+      if (line.note) {
+        doc.fillColor(MUTED).font("Helvetica-Oblique").fontSize(8.5).text(`Note: ${line.note}`, cols.item, doc.y, { width: contentWidth * 0.6 });
+      }
       doc.moveDown(0.3);
     }
   }

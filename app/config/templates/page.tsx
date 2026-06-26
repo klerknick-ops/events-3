@@ -30,6 +30,7 @@ interface SlotDraft {
 interface ProductDraft {
   productId: string;
   quantity: number;
+  slotIndex: number | null; // which slot (by order) this product attaches to
 }
 interface TaskDraft {
   taskTemplateId: string;
@@ -179,12 +180,20 @@ function TemplateForm({
             dayOffset: s.dayOffset,
           })),
         );
-        setProds(
-          (t.products ?? []).map((p) => ({
-            productId: p.productId,
-            quantity: p.quantity,
-          })),
-        );
+        {
+          // Each product maps to its slot index (null = template-level / legacy).
+          const fromSlots = (t.slots ?? []).flatMap((s, i) =>
+            (s.products ?? []).map((p) => ({
+              productId: p.productId,
+              quantity: p.quantity,
+              slotIndex: i,
+            })),
+          );
+          const legacy = (t.products ?? [])
+            .filter((p) => !p.templateSlotId)
+            .map((p) => ({ productId: p.productId, quantity: p.quantity, slotIndex: null }));
+          setProds([...fromSlots, ...legacy]);
+        }
         setTasks(
           (t.tasks ?? []).map((tk) => ({ taskTemplateId: tk.taskTemplateId })),
         );
@@ -215,7 +224,11 @@ function TemplateForm({
           })),
         products: prods
           .filter((p) => p.productId)
-          .map((p) => ({ productId: p.productId, quantity: Number(p.quantity) || 1 })),
+          .map((p) => ({
+            productId: p.productId,
+            quantity: Number(p.quantity) || 1,
+            slotIndex: p.slotIndex,
+          })),
         tasks: tasks.filter((t) => t.taskTemplateId),
       };
       if (templateId) await api.patch(`/api/templates/${templateId}`, payload);
@@ -364,13 +377,13 @@ function TemplateForm({
             )}
           </Section>
 
-          {/* Products */}
+          {/* Products (attached per time slot) */}
           <Section
             title="Default products"
             onAdd={() =>
               setProds((p) => [
                 ...p,
-                { productId: products[0]?.id ?? "", quantity: 1 },
+                { productId: products[0]?.id ?? "", quantity: 1, slotIndex: slots.length ? 0 : null },
               ])
             }
           >
@@ -378,6 +391,10 @@ function TemplateForm({
               <Empty>No products attached.</Empty>
             ) : (
               <div className="space-y-2">
+                <p className="text-xs text-ink-muted">
+                  Each product is attached to a time slot; applying the template pre-fills that
+                  slot&rsquo;s products.
+                </p>
                 {prods.map((p, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <Select
@@ -393,9 +410,25 @@ function TemplateForm({
                         </option>
                       ))}
                     </Select>
+                    <Select
+                      className="h-9 w-40"
+                      value={p.slotIndex == null ? "" : String(p.slotIndex)}
+                      onChange={(e) =>
+                        updateAt(setProds, i, {
+                          slotIndex: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                    >
+                      <option value="">Whole event</option>
+                      {slots.map((s, si) => (
+                        <option key={si} value={si}>
+                          {s.label || `Slot ${si + 1}`}
+                        </option>
+                      ))}
+                    </Select>
                     <Input
                       type="number"
-                      className="h-9 w-24"
+                      className="h-9 w-20"
                       value={p.quantity}
                       onChange={(e) =>
                         updateAt(setProds, i, {

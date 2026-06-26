@@ -17,6 +17,7 @@ export interface FunctionSheetLine {
   net: number;
   taxAmount: number;
   gross: number;
+  note?: string | null;
   changed?: LineChange;
 }
 
@@ -46,7 +47,7 @@ export interface FunctionSheetData {
     email: string | null;
     phone: string | null;
   };
-  slots: { label: string; range: string; changed?: boolean }[];
+  slots: { label: string; range: string; note?: string | null; changed?: boolean }[];
   groups: FunctionSheetGroup[];
   rooms: FunctionSheetRoomLine[];
   roomTotals: Totals;
@@ -97,6 +98,7 @@ export function buildFunctionSheet(
       net: l.totals.net,
       taxAmount: l.totals.taxAmount,
       gross: l.totals.gross,
+      note: l.note,
     });
     bySlot.set(l.slotId, arr);
   }
@@ -151,6 +153,7 @@ export function buildFunctionSheet(
         new Date(s.startsAt),
         new Date(s.endsAt),
       )}`,
+      note: s.notes ?? null,
     })),
     groups,
     rooms,

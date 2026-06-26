@@ -6,6 +6,7 @@ import type { Product, TimeSlot } from "@/lib/types";
 import { formatMoney, lineTotals } from "@/lib/money";
 import { Button, Input, Spinner } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { RuleAlerts } from "./RuleAlerts";
 
 // Add a catalog product to a specific time slot. Per-person products default
 // their quantity to the slot's person count (still editable before adding).
@@ -134,6 +135,11 @@ export function ProductPicker({
                   <p className="mt-1 text-xs text-ink-muted">{selected.description}</p>
                 ) : null}
               </div>
+              <RuleAlerts
+                productId={selected.id}
+                spaceId={slot.spaceId}
+                persons={slot.personCount}
+              />
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-ink-muted">
                   Quantity

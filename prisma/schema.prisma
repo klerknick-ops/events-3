@@ -39,6 +39,9 @@ model Organization {
   generatedDocs GeneratedDocument[]
   emails        EmailMessage[]
   tasks         Task[]
+  notificationRules NotificationRule[]
+  budgets       Budget[]
+  statusWeights StatusWeight[]
 }
 
 // ---------- Users & auth ----------
@@ -61,6 +64,8 @@ model User {
   notes          EventNote[]
   ownedEmails    EmailMessage[] @relation("EmailOwner")
   assignedEvents Event[]        @relation("EventAssignee")
+  assignedTasks  Task[]         @relation("TaskAssignee")
+  taskRules      TaskTemplate[] @relation("TaskRuleAssignee")
 
   @@index([organizationId])
 }
@@ -132,6 +137,7 @@ model BookableSpace {
   timeSlots     EventTimeSlot[]
   templateSlots TemplateSlot[]
   setups        Setup[]
+  notificationRuleSpaces NotificationRuleSpace[]
 
   @@index([organizationId])
 }
@@ -150,6 +156,7 @@ model Setup {
 
   rules     SetupRule[]
   timeSlots EventTimeSlot[]
+  notificationRules NotificationRule[]
 
   @@index([spaceId])
 }
@@ -185,6 +192,7 @@ model Product {
 
   eventProducts    EventProduct[]
   templateProducts TemplateProduct[]
+  notificationRules NotificationRule[]
 
   @@index([organizationId])
 }
@@ -247,9 +255,29 @@ model TaskTemplate {
   organizationId  String
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   title           String
-  defaultAssignee String?
+  defaultAssignee String?      // legacy free-text (superseded by assignedUserId)
+  assignedUserId  String?
+  assignedUser    User?        @relation("TaskRuleAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  // Trigger type: how/when this rule generates a task.
+  triggerType     String       @default("RELATIVE") // RELATIVE | RECURRING | ACTION
+
+  // RELATIVE: deadline = event date (or creation) +/- offsetDays.
   offsetDays      Int          @default(0)
   basis           String       @default("BEFORE_EVENT") // BEFORE_EVENT | BEFORE_CREATION
+
+  // RECURRING: WEEKLY (recurrenceWeekday) or MONTHLY (recurrenceDay, or
+  // recurrenceOrdinal+recurrenceWeekday for "2nd Monday").
+  recurrenceFreq    String?    // WEEKLY | MONTHLY
+  recurrenceWeekday Int?       // 0 (Sun) .. 6 (Sat)
+  recurrenceDay     Int?       // day-of-month 1..31
+  recurrenceOrdinal Int?       // 1..5, -1 = last (ordinal weekday)
+
+  // ACTION: trigger on an inbox or status-change event.
+  actionType      String?      // EMAIL_RECEIVED | EMAIL_SENT | STATUS_CHANGE
+  actionStatus    String?      // target status for STATUS_CHANGE
+  leadDays        Int          @default(7) // deadline = trigger date + leadDays (keeps required-deadline rule)
+
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -289,18 +317,26 @@ model TemplateSlot {
   dayOffset  Int            @default(0) // day relative to the event's first day
   sortOrder  Int            @default(0)
 
+  products TemplateProduct[]
+
   @@index([templateId])
 }
 
+// Default product attached to a template. Products now live under a template
+// time slot (templateSlotId); rows with a null slot are legacy template-level
+// defaults kept for back-compat.
 model TemplateProduct {
-  id         String        @id @default(cuid())
-  templateId String
-  template   EventTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  productId  String
-  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
-  quantity   Int           @default(1)
+  id             String        @id @default(cuid())
+  templateId     String
+  template       EventTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateSlotId String?
+  templateSlot   TemplateSlot? @relation(fields: [templateSlotId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity       Int           @default(1)
 
   @@index([templateId])
+  @@index([templateSlotId])
 }
 
 model TemplateTask {
@@ -399,6 +435,7 @@ model EmailMessage {
   ownerId        String?      // manually-assigned owner for lead emails (no event)
   owner          User?        @relation("EmailOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   deletedAt      DateTime?    // soft delete — hidden from views, kept for audit/recovery
+  archivedAt     DateTime?    // archived — hidden from default view, kept in "Archived" folder
   createdAt      DateTime     @default(now())
 
   attachments EmailAttachment[]
@@ -468,6 +505,9 @@ model EventTimeSlot {
   setupHeadTables Boolean @default(false)
   setupManual     Boolean @default(false) // true once the user overrides auto-rules
 
+  // Ops-facing note shown on this slot in generated documents.
+  notes String?
+
   products EventProduct[]
 
   @@index([eventId])
@@ -489,8 +529,12 @@ model EventProduct {
   productId            String
   product              Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
   quantity             Int            @default(1)
+  // Per-line overrides for this booking only (master Product unchanged).
+  nameOverride         String?
   unitPriceNetOverride Float?
   taxRateOverride      Float?
+  // Ops-facing note shown on this product line in generated documents.
+  notes                String?
 
   @@index([eventId])
   @@index([dayId])
@@ -509,7 +553,9 @@ model Task {
   emailMessageId String?
   emailMessage   EmailMessage? @relation(fields: [emailMessageId], references: [id], onDelete: SetNull)
   title          String
-  assignee       String?
+  assignee       String?       // legacy free-text (superseded by assignedUserId)
+  assignedUserId String?
+  assignedUser   User?         @relation("TaskAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
   dueDate        DateTime?
   completed      Boolean       @default(false)
   createdAt      DateTime      @default(now())
@@ -518,6 +564,7 @@ model Task {
   @@index([organizationId])
   @@index([eventId])
   @@index([emailMessageId])
+  @@index([assignedUserId])
   @@index([dueDate])
 }
 
@@ -572,4 +619,74 @@ model ActivityLog {
   @@index([eventId])
   @@index([userId])
   @@index([createdAt])
+}
+
+// ---------- Notification / constraint rules ----------
+
+// A planning constraint or reminder surfaced (non-blocking) while a planner
+// selects a matching space, product or setup — e.g. "garden may not be entered
+// before 10:00" or "if the garden is booked, include 2 hotel rooms".
+model NotificationRule {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  targetType     String       // SPACE | PRODUCT | SETUP
+  message        String       // warning/instruction shown to staff
+  minPersons     Int?         // optional person-count threshold condition
+  productId      String?      // PRODUCT target
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  setupId        String?      // SETUP target
+  setup          Setup?       @relation(fields: [setupId], references: [id], onDelete: Cascade)
+  active         Boolean      @default(true)
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  spaces NotificationRuleSpace[]
+
+  @@index([organizationId])
+}
+
+// Applicable space(s) for a notification rule (for SPACE target these are the
+// targeted spaces; for PRODUCT/SETUP they scope where the rule applies).
+model NotificationRuleSpace {
+  id      String           @id @default(cuid())
+  ruleId  String
+  rule    NotificationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  spaceId String
+  space   BookableSpace    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, spaceId])
+  @@index([ruleId])
+  @@index([spaceId])
+}
+
+// ---------- Budgets & revenue weighting ----------
+
+// Monthly revenue target (YYYY-MM).
+model Budget {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  month          String       // "YYYY-MM"
+  amount         Float        @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, month])
+  @@index([organizationId])
+}
+
+// Admin-configurable revenue weight per event status, used for OTB ("on the
+// books") weighted-revenue calculations (e.g. INQUIRY 50%, CONFIRMED 100%).
+model StatusWeight {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  status         String       // INQUIRY | TENTATIVE | CONFIRMED | COMPLETED | CANCELLED
+  weightPercent  Int          @default(100)
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, status])
+  @@index([organizationId])
 }

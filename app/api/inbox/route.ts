@@ -13,10 +13,14 @@ export const GET = route(async (req) => {
   const url = new URL(req.url);
   const view = url.searchParams.get("view") ?? "client";
   const folder = url.searchParams.get("folder") ?? "inbox";
+  const showArchived = url.searchParams.get("archived") === "1";
   const q = url.searchParams.get("q")?.trim();
 
   const base = { organizationId: orgId, deletedAt: null };
-  const where: Record<string, unknown> = { ...base };
+  const where: Record<string, unknown> = {
+    ...base,
+    archivedAt: showArchived ? { not: null } : null,
+  };
   if (view === "client") {
     where.autoMatched = true;
   } else {
@@ -53,12 +57,15 @@ export const GET = route(async (req) => {
     take: 200,
   });
 
+  // Default views exclude archived; counts mirror that.
+  const active = { ...base, archivedAt: null };
   const counts = {
-    client: await prisma.emailMessage.count({ where: { ...base, autoMatched: true } }),
+    client: await prisma.emailMessage.count({ where: { ...active, autoMatched: true } }),
     leadsInbox: await prisma.emailMessage.count({
-      where: { ...base, direction: "INBOUND", autoMatched: false },
+      where: { ...active, direction: "INBOUND", autoMatched: false },
     }),
-    leadsSent: await prisma.emailMessage.count({ where: { ...base, direction: "OUTBOUND" } }),
+    leadsSent: await prisma.emailMessage.count({ where: { ...active, direction: "OUTBOUND" } }),
+    archived: await prisma.emailMessage.count({ where: { ...base, archivedAt: { not: null } } }),
   };
 
   return ok({

@@ -5,8 +5,10 @@ import { lineTotals, sumTotals, type LineTax, type Totals } from "./money";
 export interface EventProductLike {
   id: string;
   quantity: number;
+  nameOverride?: string | null;
   unitPriceNetOverride: number | null;
   taxRateOverride: number | null;
+  notes?: string | null;
   slotId: string | null;
   product: {
     id: string;
@@ -26,6 +28,7 @@ export interface ComputedLine {
   unitNet: number;
   taxRate: number;
   slotId: string | null;
+  note: string | null;
   totals: LineTax;
 }
 
@@ -35,11 +38,13 @@ export function computeLine(ep: EventProductLike): ComputedLine {
   return {
     id: ep.id,
     productId: ep.product.id,
-    title: ep.product.title,
+    // Per-line name override falls back to the catalog product title.
+    title: ep.nameOverride?.trim() || ep.product.title,
     quantity: ep.quantity,
     unitNet,
     taxRate,
     slotId: ep.slotId,
+    note: ep.notes ?? null,
     totals: lineTotals(unitNet, ep.quantity, taxRate),
   };
 }

@@ -33,6 +33,7 @@ export const GET = route(async (req) => {
         },
       },
       emailMessage: { select: { id: true, subject: true, fromAddress: true } },
+      assignedUser: { select: { id: true, name: true } },
     },
   });
   return ok(tasks);

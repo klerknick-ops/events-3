@@ -16,7 +16,10 @@ export const fullEventInclude = {
     orderBy: { id: "asc" },
   },
   roomBookings: { include: { roomType: true }, orderBy: { checkIn: "asc" } },
-  tasks: { orderBy: [{ completed: "asc" }, { dueDate: "asc" }] },
+  tasks: {
+    orderBy: [{ completed: "asc" }, { dueDate: "asc" }],
+    include: { assignedUser: { select: { id: true, name: true } } },
+  },
 } satisfies Prisma.EventInclude;
 
 export type FullEvent = Prisma.EventGetPayload<{ include: typeof fullEventInclude }>;

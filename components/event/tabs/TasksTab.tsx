@@ -4,6 +4,8 @@ import { useState } from "react";
 import { api } from "@/lib/fetcher";
 import type { EventFull } from "@/lib/types";
 import { Button } from "@/components/ui";
+import { useMe } from "@/components/MeProvider";
+import { OwnerSelect } from "@/components/inbox/OwnerSelect";
 import { Empty, SectionHeader } from "../PanelBits";
 
 export function TasksTab({
@@ -68,7 +70,7 @@ export function TasksTab({
                   {t.dueDate
                     ? `Due ${new Date(t.dueDate).toLocaleDateString()}`
                     : "No due date"}
-                  {t.assignee ? ` · ${t.assignee}` : ""}
+                  {t.assignedUser?.name ? ` · 👤 ${t.assignedUser.name}` : t.assignee ? ` · ${t.assignee}` : ""}
                 </div>
               </div>
               <button
@@ -88,17 +90,19 @@ export function TasksTab({
   );
 }
 
-// Manual task creation — a deadline is required (Phase 3, Section 4).
+// Manual task creation — a deadline is required (Phase 3, Section 4). Assignee is
+// a user dropdown defaulting to the current user (Phase 6, Section 5).
 function AddTaskForm({
   onAdd,
   onCancel,
 }: {
-  onAdd: (input: { title: string; dueDate: string; assignee: string | null }) => Promise<void>;
+  onAdd: (input: { title: string; dueDate: string; assignedUserId: string | null }) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { user } = useMe();
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [assignee, setAssignee] = useState("");
+  const [assignedUserId, setAssignedUserId] = useState<string | null>(user?.id ?? null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -108,7 +112,7 @@ function AddTaskForm({
     setSaving(true);
     setError(null);
     try {
-      await onAdd({ title: title.trim(), dueDate, assignee: assignee.trim() || null });
+      await onAdd({ title: title.trim(), dueDate, assignedUserId });
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
@@ -135,13 +139,10 @@ function AddTaskForm({
           />
         </label>
         <label className="flex flex-1 flex-col text-[11px] font-medium uppercase tracking-wide text-ink-muted">
-          Assignee (optional)
-          <input
-            value={assignee}
-            onChange={(e) => setAssignee(e.target.value)}
-            placeholder="e.g. Coordinator"
-            className="mt-0.5 h-9 rounded border border-base bg-surface px-2 text-sm font-normal normal-case text-ink"
-          />
+          Assignee
+          <div className="mt-0.5 font-normal normal-case">
+            <OwnerSelect value={assignedUserId} onChange={setAssignedUserId} placeholder="Unassigned" />
+          </div>
         </label>
       </div>
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}

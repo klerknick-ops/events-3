@@ -11,9 +11,11 @@ const TABS: { href: string; label: string; perm?: "MANAGE_USERS" }[] = [
   { href: "/config/rooms", label: "Hotel Rooms" },
   { href: "/config/templates", label: "Event Templates" },
   { href: "/config/task-templates", label: "Task Rules" },
+  { href: "/config/notification-rules", label: "Notification Rules" },
   { href: "/config/sheet-templates", label: "Document Templates" },
   { href: "/config/policy", label: "Cancellation Policy" },
   { href: "/config/payment-terms", label: "Payment Terms" },
+  { href: "/config/budgets", label: "Budgets" },
   { href: "/config/users", label: "Users", perm: "MANAGE_USERS" },
 ];
 

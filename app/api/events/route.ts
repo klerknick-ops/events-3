@@ -102,12 +102,15 @@ export const POST = route(async (req) => {
   const slotInputs: SlotInput[] = [];
   let productInputs: { productId: string; quantity: number }[] = [];
   let generatedTasks: { title: string; assignee: string | null; dueDate: Date | null }[] = [];
+  // Per-slot template products to attach after the event's slots are created,
+  // keyed by the slot's sortOrder (Phase 6, Section 12).
+  const slotProductInputs: { sortOrder: number; productId: string; quantity: number }[] = [];
 
   if (body.templateId) {
     const template = await prisma.eventTemplate.findFirst({
       where: { id: body.templateId, organizationId: orgId },
       include: {
-        slots: { orderBy: { sortOrder: "asc" } },
+        slots: { orderBy: { sortOrder: "asc" }, include: { products: true } },
         products: true,
         tasks: { include: { taskTemplate: true } },
       },
@@ -129,12 +132,16 @@ export const POST = route(async (req) => {
         endsAt,
         sortOrder: i,
       });
+      // Products configured on this template slot → attach to the new slot.
+      for (const p of s.products) {
+        slotProductInputs.push({ sortOrder: i, productId: p.productId, quantity: p.quantity });
+      }
     });
 
-    productInputs = template.products.map((p) => ({
-      productId: p.productId,
-      quantity: p.quantity,
-    }));
+    // Legacy template-level products (no slot) stay unassigned for back-compat.
+    productInputs = template.products
+      .filter((p) => !p.templateSlotId)
+      .map((p) => ({ productId: p.productId, quantity: p.quantity }));
 
     const eventDate =
       slotInputs.length > 0
@@ -175,6 +182,30 @@ export const POST = route(async (req) => {
   // Build EventDay rows from the created slots (or a single day if custom/blank),
   // and link slots + products to their day.
   await ensureEventDays(event.id);
+
+  // Attach per-slot template products to the freshly-created slots (matched by
+  // sortOrder), inheriting each slot's day (Phase 6, Section 12).
+  if (slotProductInputs.length > 0) {
+    const createdSlots = await prisma.eventTimeSlot.findMany({
+      where: { eventId: event.id },
+      select: { id: true, sortOrder: true, dayId: true },
+    });
+    const slotByOrder = new Map(createdSlots.map((s) => [s.sortOrder, s]));
+    const rows = slotProductInputs
+      .map((p) => {
+        const slot = slotByOrder.get(p.sortOrder);
+        if (!slot) return null;
+        return {
+          eventId: event.id,
+          slotId: slot.id,
+          dayId: slot.dayId,
+          productId: p.productId,
+          quantity: p.quantity,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+    if (rows.length > 0) await prisma.eventProduct.createMany({ data: rows });
+  }
   await logActivity({
     eventId: event.id,
     userId: user.id,

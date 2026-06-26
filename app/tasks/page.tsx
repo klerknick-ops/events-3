@@ -168,7 +168,11 @@ export default function TasksPage() {
                         ) : (
                           <span className="truncate">Lead follow-up</span>
                         )}
-                        {t.assignee ? <span>· {t.assignee}</span> : null}
+                        {t.assignedUser?.name ? (
+                          <span>· 👤 {t.assignedUser.name}</span>
+                        ) : t.assignee ? (
+                          <span>· {t.assignee}</span>
+                        ) : null}
                       </div>
                     </div>
                     <div className="shrink-0 text-xs text-ink-muted">

@@ -8,6 +8,7 @@ import { formatDateTimeRange, formatTime } from "@/lib/dates";
 import { resolveSetup } from "@/lib/setup-rules";
 import { Button, Field, Input, Select } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { RuleAlerts } from "./RuleAlerts";
 import type { SlotConflict } from "@/lib/conflicts";
 
 // Add or edit a time slot: space, date/time, person count, and room setup
@@ -33,6 +34,7 @@ export function SlotEditor({
   const [start, setStart] = useState(slot ? hhmm(new Date(slot.startsAt)) : "12:00");
   const [end, setEnd] = useState(slot ? hhmm(new Date(slot.endsAt)) : "14:00");
   const [personCount, setPersonCount] = useState(slot?.personCount ?? 0);
+  const [notes, setNotes] = useState(slot?.notes ?? "");
 
   const [setups, setSetups] = useState<Setup[]>([]);
   const [setupId, setSetupId] = useState(slot?.setupId ?? "");
@@ -76,6 +78,7 @@ export function SlotEditor({
       startsAt,
       endsAt,
       personCount,
+      notes: notes.trim() || null,
       setupId: setupId || null,
       setupManual: manual,
       setupTableCount: manual ? (ovrTables ? Number(ovrTables) : null) : auto.tableCount,
@@ -222,6 +225,16 @@ export function SlotEditor({
             )}
           </div>
         ) : null}
+
+        <RuleAlerts spaceId={spaceId} setupId={setupId || null} persons={personCount} />
+
+        <Field label="Notes (shown on documents)">
+          <Input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="e.g. doors at 17:30, no nuts, longer top table"
+          />
+        </Field>
 
         {conflicts && conflicts.length > 0 ? (
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:bg-amber-500/10">

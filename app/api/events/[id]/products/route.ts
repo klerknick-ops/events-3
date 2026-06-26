@@ -9,8 +9,10 @@ const schema = z.object({
   quantity: z.coerce.number().int().positive().default(1),
   dayId: z.string().nullish(),
   slotId: z.string().nullish(),
+  nameOverride: z.string().nullish(),
   unitPriceNetOverride: z.coerce.number().min(0).nullish(),
   taxRateOverride: z.coerce.number().min(0).nullish(),
+  notes: z.string().nullish(),
 });
 
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -39,8 +41,10 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
       quantity: body.quantity,
       dayId,
       slotId: body.slotId || null,
+      nameOverride: body.nameOverride || null,
       unitPriceNetOverride: body.unitPriceNetOverride ?? null,
       taxRateOverride: body.taxRateOverride ?? null,
+      notes: body.notes || null,
     },
     include: { product: true, slot: true },
   });

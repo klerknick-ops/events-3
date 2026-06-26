@@ -11,10 +11,12 @@ interface ReportData {
   month: string;
   eventsInMonth: number;
   total: number;
+  otb: number;
+  budget: number;
   byStatus: Record<string, number>;
   byDay: { date: string; gross: number }[];
   byWeek: { weekStart: string; gross: number }[];
-  trend: { month: string; events: number; revenue: number }[];
+  trend: { month: string; events: number; revenue: number; otb: number; budget: number }[];
 }
 
 function monthLabel(ym: string) {
@@ -102,6 +104,38 @@ export default function ReportsPage() {
               value={formatMoney(data.byStatus.CONFIRMED ?? 0)}
             />
           </div>
+
+          {/* Weighted OTB vs budget */}
+          <Card className="p-4">
+            <H>Weighted OTB vs budget</H>
+            {data.budget > 0 ? (
+              <>
+                <div className="mb-1 flex items-baseline justify-between text-sm">
+                  <span className="font-semibold text-brand-600 dark:text-brand-300">
+                    {formatMoney(data.otb)} OTB
+                  </span>
+                  <span className="text-ink-muted">of {formatMoney(data.budget)} target</span>
+                </div>
+                <div className="h-3 w-full overflow-hidden rounded bg-muted">
+                  <div
+                    className={`h-3 rounded ${data.otb >= data.budget ? "bg-emerald-500" : "bg-brand-500"}`}
+                    style={{ width: `${Math.min(100, (data.otb / data.budget) * 100)}%` }}
+                  />
+                </div>
+                <div className="mt-1 text-xs text-ink-muted">
+                  {Math.round((data.otb / data.budget) * 100)}% of target ·{" "}
+                  {data.otb >= data.budget
+                    ? "target met"
+                    : `${formatMoney(data.budget - data.otb)} to go`}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-ink-muted">
+                Weighted OTB this month: <span className="font-medium text-ink">{formatMoney(data.otb)}</span>. Set a
+                budget target for this month in Configuration → Budgets to track progress.
+              </p>
+            )}
+          </Card>
 
           {/* Revenue by status */}
           <Card className="p-4">

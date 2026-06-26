@@ -7,6 +7,7 @@ import { Button, Spinner } from "@/components/ui";
 import { ComposeModal } from "@/components/inbox/ComposeModal";
 import { EmailBody } from "@/components/inbox/EmailBody";
 import { AttachmentList } from "@/components/inbox/AttachmentList";
+import { buildReply, buildForward, type ComposePreset } from "@/components/inbox/quote";
 import { Empty, SectionHeader } from "../PanelBits";
 
 // Emails tied to this event — auto-matched client mail + manually-linked
@@ -15,7 +16,7 @@ export function InboxTab({ event }: { event: EventFull }) {
   const [emails, setEmails] = useState<EmailMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<string | null>(null);
-  const [compose, setCompose] = useState(false);
+  const [compose, setCompose] = useState<ComposePreset | null>(null);
 
   function load() {
     setLoading(true);
@@ -32,11 +33,16 @@ export function InboxTab({ event }: { event: EventFull }) {
     setEmails((prev) => prev.filter((m) => m.id !== id));
   }
 
+  async function archive(id: string) {
+    await api.patch(`/api/inbox/${id}`, { archived: true });
+    setEmails((prev) => prev.filter((m) => m.id !== id));
+  }
+
   return (
     <section>
       <div className="mb-2 flex items-center justify-between">
         <SectionHeader title="Inbox" />
-        <Button size="sm" variant="secondary" onClick={() => setCompose(true)}>
+        <Button size="sm" variant="secondary" onClick={() => setCompose({ eventId: event.id })}>
           ✎ Compose
         </Button>
       </div>
@@ -82,10 +88,28 @@ export function InboxTab({ event }: { event: EventFull }) {
                   {m.attachments && m.attachments.length > 0 ? (
                     <AttachmentList attachments={m.attachments} className="mt-3" />
                   ) : null}
-                  <div className="mt-3 text-right">
+                  <div className="mt-3 flex flex-wrap justify-end gap-3 text-xs font-medium">
+                    <button
+                      onClick={() => setCompose(buildReply(m))}
+                      className="text-brand-600 hover:underline dark:text-brand-300"
+                    >
+                      ↩ Reply
+                    </button>
+                    <button
+                      onClick={() => setCompose(buildForward(m))}
+                      className="text-brand-600 hover:underline dark:text-brand-300"
+                    >
+                      ➡ Forward
+                    </button>
+                    <button
+                      onClick={() => archive(m.id)}
+                      className="text-ink-muted hover:underline"
+                    >
+                      🗄 Archive
+                    </button>
                     <button
                       onClick={() => remove(m.id)}
-                      className="text-xs font-medium text-rose-600 hover:underline"
+                      className="text-rose-600 hover:underline"
                     >
                       🗑 Delete
                     </button>
@@ -99,10 +123,13 @@ export function InboxTab({ event }: { event: EventFull }) {
 
       {compose ? (
         <ComposeModal
-          presetEventId={event.id}
-          onClose={() => setCompose(false)}
+          presetEventId={compose.eventId ?? event.id}
+          presetTo={compose.to}
+          presetSubject={compose.subject}
+          presetBody={compose.body}
+          onClose={() => setCompose(null)}
           onSent={() => {
-            setCompose(false);
+            setCompose(null);
             load();
           }}
         />

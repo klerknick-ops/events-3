@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/fetcher";
 import { Button, Field, Input, Textarea } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { useMe } from "@/components/MeProvider";
 import { EventLinkSelect } from "./EventLinkSelect";
+import { OwnerSelect } from "./OwnerSelect";
 
 interface Signature {
   html: string;
@@ -26,17 +28,21 @@ export function ComposeModal({
   onSent,
   presetEventId,
   presetTo,
+  presetSubject,
+  presetBody,
 }: {
   onClose: () => void;
   onSent: () => void;
   presetEventId?: string | null;
   presetTo?: string;
+  presetSubject?: string;
+  presetBody?: string;
 }) {
   const [to, setTo] = useState(presetTo ?? "");
   const [cc, setCc] = useState("");
   const [showCc, setShowCc] = useState(false);
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
+  const [subject, setSubject] = useState(presetSubject ?? "");
+  const [body, setBody] = useState(presetBody ?? "");
   const [eventId, setEventId] = useState<string | null>(presetEventId ?? null);
   const [files, setFiles] = useState<File[]>([]);
   const [sig, setSig] = useState<Signature | null>(null);
@@ -45,11 +51,12 @@ export function ComposeModal({
   const [sigInserted, setSigInserted] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Pre-send task (Section 6).
+  // Pre-send task (Section 6). Assignee defaults to the current user (Phase 6 §5).
+  const me = useMe();
   const [addTask, setAddTask] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDue, setTaskDue] = useState("");
-  const [taskAssignee, setTaskAssignee] = useState("");
+  const [taskAssigneeId, setTaskAssigneeId] = useState<string | null>(me.user?.id ?? null);
 
   // Auto-load the Exclaimer signature and append it to the (empty) body.
   useEffect(() => {
@@ -86,7 +93,7 @@ export function ComposeModal({
       if (addTask && taskTitle.trim()) {
         fd.set("taskTitle", taskTitle);
         fd.set("taskDueDate", taskDue);
-        fd.set("taskAssignee", taskAssignee);
+        if (taskAssigneeId) fd.set("taskAssigneeId", taskAssigneeId);
       }
       for (const f of files) fd.append("attachments", f);
 
@@ -243,12 +250,8 @@ export function ComposeModal({
               <Field label="Deadline (required)">
                 <Input type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
               </Field>
-              <Field label="Assignee (optional)">
-                <Input
-                  value={taskAssignee}
-                  onChange={(e) => setTaskAssignee(e.target.value)}
-                  placeholder="Name"
-                />
+              <Field label="Assignee">
+                <OwnerSelect value={taskAssigneeId} onChange={setTaskAssigneeId} placeholder="Unassigned" />
               </Field>
             </div>
           ) : null}

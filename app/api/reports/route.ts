@@ -4,6 +4,7 @@ import { requireOrgPermission } from "@/lib/tenant";
 import { computeEventTotals, computeRoomTotals } from "@/lib/event-helpers";
 import { ymd } from "@/lib/dates";
 import { round2 } from "@/lib/money";
+import { resolveWeights } from "@/lib/otb";
 
 // Reporting data for a given month: event counts, revenue by day/week/month,
 // and revenue split by status. Gated to managers/admins.
@@ -35,10 +36,19 @@ export const GET = route(async (req) => {
     },
   });
 
+  // Status weights + budgets for OTB (on-the-books) weighted revenue.
+  const weightRows = await prisma.statusWeight.findMany({ where: { organizationId: orgId } });
+  const weights = resolveWeights(weightRows);
+  const budgetRows = await prisma.budget.findMany({ where: { organizationId: orgId } });
+  const budgetByMonth = new Map(budgetRows.map((b) => [b.month, b.amount]));
+
   function grossOf(ev: (typeof events)[number]): number {
     const products = computeEventTotals(ev.products).totals.gross;
     const rooms = computeRoomTotals(ev.roomBookings).totals.gross;
     return round2(products + rooms);
+  }
+  function otbOf(ev: (typeof events)[number]): number {
+    return round2((grossOf(ev) * (weights[ev.status] ?? 100)) / 100);
   }
   function primaryDate(ev: (typeof events)[number]): Date {
     if (ev.timeSlots.length === 0) return ev.createdAt;
@@ -77,8 +87,19 @@ export const GET = route(async (req) => {
     }
   }
 
-  // ----- 6-month trend -----
-  const trend: { month: string; events: number; revenue: number }[] = [];
+  // Weighted OTB revenue for the selected month + its budget target.
+  const otb = round2(inMonth.reduce((sum, e) => sum + otbOf(e), 0));
+  const monthKey = `${y}-${String(m).padStart(2, "0")}`;
+  const budget = budgetByMonth.get(monthKey) ?? 0;
+
+  // ----- 6-month trend (revenue, weighted OTB, budget) -----
+  const trend: {
+    month: string;
+    events: number;
+    revenue: number;
+    otb: number;
+    budget: number;
+  }[] = [];
   for (let i = 5; i >= 0; i--) {
     const md = new Date(y, m - 1 - i, 1);
     const key = `${md.getFullYear()}-${String(md.getMonth() + 1).padStart(2, "0")}`;
@@ -91,13 +112,22 @@ export const GET = route(async (req) => {
     const revenue = round2(
       evs.filter((e) => e.status !== "CANCELLED").reduce((sum, e) => sum + grossOf(e), 0),
     );
-    trend.push({ month: key, events: evs.length, revenue });
+    const otbMonth = round2(evs.reduce((sum, e) => sum + otbOf(e), 0));
+    trend.push({
+      month: key,
+      events: evs.length,
+      revenue,
+      otb: otbMonth,
+      budget: budgetByMonth.get(key) ?? 0,
+    });
   }
 
   return ok({
-    month: `${y}-${String(m).padStart(2, "0")}`,
+    month: monthKey,
     eventsInMonth: inMonth.length,
     total,
+    otb,
+    budget,
     byStatus,
     byDay: [...byDay.entries()].sort().map(([date, gross]) => ({ date, gross })),
     byWeek: [...byWeek.entries()].sort().map(([weekStart, gross]) => ({ weekStart, gross })),

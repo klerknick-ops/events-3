@@ -6,7 +6,8 @@ import { type EventStatus } from "@/lib/enums";
 import { computeEventTotals } from "@/lib/event-helpers";
 import { formatMoney } from "@/lib/money";
 import { formatDateTimeRange } from "@/lib/dates";
-import { ContactEventList, type EventRow } from "@/components/event/ContactEventList";
+import { type EventRow } from "@/components/event/ContactEventList";
+import { ClientProfileTabs } from "@/components/event/ClientProfileTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -77,17 +78,7 @@ export default async function ContactHistoryPage({
         ) : null}
       </div>
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-muted">
-        Event history ({contact.events.length})
-      </h2>
-
-      {eventRows.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-base p-6 text-center text-sm text-ink-muted">
-          No events for this client yet.
-        </p>
-      ) : (
-        <ContactEventList events={eventRows} />
-      )}
+      <ClientProfileTabs events={eventRows} emailsEndpoint={`/api/contacts/${contact.id}/emails`} />
     </div>
   );
 }

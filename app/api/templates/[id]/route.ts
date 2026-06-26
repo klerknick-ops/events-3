@@ -11,7 +11,10 @@ export const GET = route(async (_req: Request, ctx: Ctx) => {
   const template = await prisma.eventTemplate.findFirst({
     where: { id, organizationId: orgId },
     include: {
-      slots: { orderBy: { sortOrder: "asc" }, include: { space: true } },
+      slots: {
+        orderBy: { sortOrder: "asc" },
+        include: { space: true, products: { include: { product: true } } },
+      },
       products: { include: { product: true } },
       tasks: { orderBy: { sortOrder: "asc" }, include: { taskTemplate: true } },
     },
@@ -30,6 +33,8 @@ const slotSchema = z.object({
 const productSchema = z.object({
   productId: z.string(),
   quantity: z.coerce.number().int().positive().default(1),
+  // Index into the slots array this product belongs to (null = template-level).
+  slotIndex: z.coerce.number().int().min(0).nullish(),
 });
 const taskSchema = z.object({ taskTemplateId: z.string() });
 
@@ -60,25 +65,41 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
       },
     });
 
+    // Recreate slots one-by-one so we capture their ids for per-slot products.
+    let slotIds: string[] = [];
     if (body.slots) {
       await tx.templateSlot.deleteMany({ where: { templateId: id } });
-      await tx.templateSlot.createMany({
-        data: body.slots.map((s, i) => ({
-          templateId: id,
-          spaceId: s.spaceId || null,
-          label: s.label || null,
-          startTime: s.startTime,
-          durationMin: s.durationMin,
-          dayOffset: s.dayOffset ?? 0,
-          sortOrder: i,
-        })),
+      slotIds = [];
+      for (let i = 0; i < body.slots.length; i++) {
+        const s = body.slots[i];
+        const created = await tx.templateSlot.create({
+          data: {
+            templateId: id,
+            spaceId: s.spaceId || null,
+            label: s.label || null,
+            startTime: s.startTime,
+            durationMin: s.durationMin,
+            dayOffset: s.dayOffset ?? 0,
+            sortOrder: i,
+          },
+        });
+        slotIds.push(created.id);
+      }
+    } else {
+      const existing = await tx.templateSlot.findMany({
+        where: { templateId: id },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true },
       });
+      slotIds = existing.map((s) => s.id);
     }
     if (body.products) {
       await tx.templateProduct.deleteMany({ where: { templateId: id } });
       await tx.templateProduct.createMany({
         data: body.products.map((p) => ({
           templateId: id,
+          templateSlotId:
+            p.slotIndex != null && slotIds[p.slotIndex] ? slotIds[p.slotIndex] : null,
           productId: p.productId,
           quantity: p.quantity,
         })),
@@ -98,7 +119,10 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
     return tx.eventTemplate.findUnique({
       where: { id },
       include: {
-        slots: { orderBy: { sortOrder: "asc" }, include: { space: true } },
+        slots: {
+          orderBy: { sortOrder: "asc" },
+          include: { space: true, products: { include: { product: true } } },
+        },
         products: { include: { product: true } },
         tasks: { orderBy: { sortOrder: "asc" }, include: { taskTemplate: true } },
       },

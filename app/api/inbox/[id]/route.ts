@@ -8,6 +8,7 @@ const patchSchema = z.object({
   eventId: z.string().nullable().optional(), // manual link/unlink
   ownerId: z.string().nullable().optional(), // manual owner for lead emails
   isRead: z.boolean().optional(),
+  archived: z.boolean().optional(), // archive / unarchive
 });
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -25,6 +26,18 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
   const data: Record<string, unknown> = {};
   if ("label" in body) data.label = body.label ?? null;
   if ("isRead" in body) data.isRead = body.isRead;
+  if ("archived" in body) {
+    if (body.archived) {
+      // Archive is only allowed for emails connected to an event, or leads whose
+      // sender has been linked to a Contact (Phase 6, Section 2).
+      if (!existing.eventId && !existing.contactId) {
+        return badRequest("Only event-linked or client-linked emails can be archived");
+      }
+      data.archivedAt = new Date();
+    } else {
+      data.archivedAt = null;
+    }
+  }
   if ("eventId" in body) {
     if (body.eventId) {
       const event = await prisma.event.findFirst({

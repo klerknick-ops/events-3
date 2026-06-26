@@ -19,6 +19,7 @@ const schema = z.object({
   setupTableCount: z.coerce.number().int().min(0).nullable().optional(),
   setupHeadTables: z.boolean().optional(),
   setupManual: z.boolean().optional(),
+  notes: z.string().nullish(),
   force: z.boolean().optional(),
 });
 
@@ -80,6 +81,7 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
       startsAt,
       endsAt,
       personCount,
+      notes: body.notes === undefined ? undefined : body.notes,
       ...setupFields,
     },
     include: { space: true },

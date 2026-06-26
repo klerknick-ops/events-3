@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/fetcher";
 import type { Space, TimelineSlot } from "@/lib/types";
-import { addDays, formatDateLong, parseYmd, ymd } from "@/lib/dates";
+import { addDays, formatDateLong, parseYmd, ymd, DAY_START_HOUR, DAY_END_HOUR } from "@/lib/dates";
+
+const TIMELINE_LABEL_WIDTH = 184; // keep in sync with TimelineGrid LABEL_WIDTH
 import { Button, EmptyState, Spinner } from "@/components/ui";
 import { TimelineGrid } from "./TimelineGrid";
 import { SidePanel } from "@/components/SidePanel";
@@ -32,6 +34,23 @@ export function TimelineApp() {
     return d;
   });
   const [zoomIdx, setZoomIdx] = useState(2);
+  // Measure the body so the day track fills wide screens (Phase 6, Section 9).
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyWidth, setBodyWidth] = useState(0);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      setBodyWidth(entries[0]?.contentRect.width ?? 0);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const fitPxPerHour =
+    bodyWidth > 0
+      ? Math.floor((bodyWidth - TIMELINE_LABEL_WIDTH - 24) / (DAY_END_HOUR - DAY_START_HOUR))
+      : 0;
+  const effectivePxPerHour = Math.max(ZOOM_STEPS[zoomIdx], fitPxPerHour);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [slots, setSlots] = useState<TimelineSlot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,7 +178,7 @@ export function TimelineApp() {
       </div>
 
       {/* Timeline body */}
-      <div className="flex-1 overflow-auto bg-surface-2">
+      <div ref={bodyRef} className="flex-1 overflow-auto bg-surface-2">
         {loading ? (
           <div className="flex h-full items-center justify-center text-ink-muted">
             <Spinner />
@@ -182,7 +201,7 @@ export function TimelineApp() {
             spaces={spaces}
             slots={slots}
             day={day}
-            pxPerHour={ZOOM_STEPS[zoomIdx]}
+            pxPerHour={effectivePxPerHour}
             onSlotClick={(slot) =>
               setPanel({ mode: "view", eventId: slot.event.id })
             }

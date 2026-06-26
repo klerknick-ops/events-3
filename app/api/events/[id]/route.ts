@@ -6,6 +6,7 @@ import { EVENT_STATUSES } from "@/lib/enums";
 import { can } from "@/lib/permissions";
 import { requireOrg, getEventInOrg } from "@/lib/tenant";
 import { logActivity, diffEventChanges } from "@/lib/activity";
+import { runActionRules } from "@/lib/action-tasks";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -80,6 +81,16 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
 
   for (const entry of diffEventChanges(before, event)) {
     await logActivity({ eventId: id, organizationId: orgId, userId: user.id, ...entry });
+  }
+
+  // Fire action-based task rules on a status transition (Phase 6, Section 7).
+  if (body.status && body.status !== before.status) {
+    await runActionRules({
+      orgId,
+      actionType: "STATUS_CHANGE",
+      status: body.status,
+      eventId: id,
+    });
   }
 
   return ok(event);
