@@ -25,17 +25,20 @@ export default {
         base: "rgb(var(--border) / <alpha-value>)",
         muted: "rgb(var(--muted) / <alpha-value>)",
         accent: "rgb(var(--accent) / <alpha-value>)", // selected/highlight bg
+        // Lantern brand scale — ember → red. brand-600 (#BD3B2C) is the primary
+        // action colour; brand-500 (#E8643F) the ember accent; brand-300 a warm
+        // light tint that reads on the dark ink surface.
         brand: {
-          50: "#eef2ff",
-          100: "#e0e7ff",
-          200: "#c7d2fe",
-          300: "#a5b4fc",
-          400: "#818cf8",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
-          800: "#3730a3",
-          900: "#312e81",
+          50: "#fceee9",
+          100: "#f9d9cd",
+          200: "#f2b39e",
+          300: "#e89177",
+          400: "#ec6e47",
+          500: "#e8643f",
+          600: "#bd3b2c",
+          700: "#9c2e22",
+          800: "#7c261d",
+          900: "#5f1e17",
         },
       },
       fontFamily: {

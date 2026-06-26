@@ -252,39 +252,40 @@ function MessagePane({
   const canArchive = Boolean(message.eventId || message.contactId);
   return (
     <Card className="p-5">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-ink">{message.subject}</h2>
-          <p className="mt-0.5 text-sm text-ink-soft">
-            {message.direction === "OUTBOUND" ? "To " : "From "}
-            <span className="font-medium">{message.fromName || message.fromAddress}</span>
-            {message.direction === "INBOUND" ? ` <${message.fromAddress}>` : ` ${message.toAddresses}`}
-          </p>
-          {message.ccAddresses ? (
-            <p className="text-xs text-ink-muted">Cc: {message.ccAddresses}</p>
-          ) : null}
-          <p className="text-xs text-ink-muted">{new Date(message.receivedAt).toLocaleString()}</p>
-        </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          <Button size="sm" variant="secondary" onClick={onReply}>
-            ↩ Reply
+      {/* Header: subject + sender meta (full width, no crowding by actions). */}
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold text-ink">{message.subject}</h2>
+        <p className="mt-0.5 text-sm text-ink-soft">
+          {message.direction === "OUTBOUND" ? "To " : "From "}
+          <span className="font-medium">{message.fromName || message.fromAddress}</span>
+          {message.direction === "INBOUND" ? ` <${message.fromAddress}>` : ` ${message.toAddresses}`}
+        </p>
+        {message.ccAddresses ? (
+          <p className="text-xs text-ink-muted">Cc: {message.ccAddresses}</p>
+        ) : null}
+        <p className="text-xs text-ink-muted">{new Date(message.receivedAt).toLocaleString()}</p>
+      </div>
+
+      {/* Action toolbar on its own row so the buttons never overlap the subject. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 border-y border-base py-2">
+        <Button size="sm" variant="secondary" onClick={onReply}>
+          ↩ Reply
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onForward}>
+          ➡ Forward
+        </Button>
+        {isArchived ? (
+          <Button size="sm" variant="secondary" onClick={() => onArchive(message.id, false)}>
+            ↩ Unarchive
           </Button>
-          <Button size="sm" variant="secondary" onClick={onForward}>
-            ➡ Forward
+        ) : canArchive ? (
+          <Button size="sm" variant="secondary" onClick={() => onArchive(message.id, true)}>
+            🗄 Archive
           </Button>
-          {isArchived ? (
-            <Button size="sm" variant="secondary" onClick={() => onArchive(message.id, false)}>
-              ↩ Unarchive
-            </Button>
-          ) : canArchive ? (
-            <Button size="sm" variant="secondary" onClick={() => onArchive(message.id, true)}>
-              🗄 Archive
-            </Button>
-          ) : null}
-          <Button size="sm" variant="danger" onClick={() => onDelete(message.id)}>
-            🗑 Delete
-          </Button>
-        </div>
+        ) : null}
+        <Button size="sm" variant="danger" className="ml-auto" onClick={() => onDelete(message.id)}>
+          🗑 Delete
+        </Button>
       </div>
 
       {/* Tagging + linking + owner controls (Leads & Vendors) */}

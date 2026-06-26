@@ -3,30 +3,31 @@
 @tailwind utilities;
 
 /* Semantic color tokens as space-separated RGB triplets (consumed by Tailwind
-   via rgb(var(--x) / <alpha-value>)). Light values on :root, dark on .dark. */
+   via rgb(var(--x) / <alpha-value>)). Lantern brand palette — warm parchment in
+   light, ink + ember in dark. Light values on :root, dark on .dark. */
 :root {
-  --ink: 15 23 42; /* slate-900 */
-  --ink-soft: 51 65 85; /* slate-700 */
-  --ink-muted: 100 116 139; /* slate-500 */
-  --app: 248 250 252; /* slate-50 */
-  --surface: 255 255 255; /* white */
-  --surface-2: 241 245 249; /* slate-100 */
-  --border: 226 232 240; /* slate-200 */
-  --muted: 241 245 249; /* slate-100 */
-  --accent: 238 242 255; /* brand-50 */
+  --ink: 22 18 19; /* ink #161213 */
+  --ink-soft: 60 52 50; /* warm slate */
+  --ink-muted: 124 110 102; /* warm gray */
+  --app: 244 236 223; /* parchment-ish background */
+  --surface: 255 251 244; /* warm white card */
+  --surface-2: 246 238 226; /* parchment inset */
+  --border: 226 214 198; /* warm border */
+  --muted: 244 236 223; /* parchment */
+  --accent: 251 222 207; /* light ember selection (#FBDECF) */
   color-scheme: light;
 }
 
 .dark {
-  --ink: 226 232 240; /* slate-200 */
-  --ink-soft: 203 213 225; /* slate-300 */
-  --ink-muted: 148 163 184; /* slate-400 */
-  --app: 8 11 22; /* near-black */
-  --surface: 17 24 39; /* slate-900 */
-  --surface-2: 30 41 59; /* slate-800 */
-  --border: 38 49 70; /* slate-800/700 blend */
-  --muted: 30 41 59; /* slate-800 */
-  --accent: 39 39 84; /* muted indigo for selection */
+  --ink: 247 239 224; /* parchment text #F7EFE0 */
+  --ink-soft: 224 214 196; /* dim parchment */
+  --ink-muted: 168 158 142; /* warm gray */
+  --app: 22 18 19; /* ink #161213 */
+  --surface: 31 26 26; /* ink-card #1F1A1A */
+  --surface-2: 42 33 30; /* warmer raised */
+  --border: 64 46 42; /* red-tinted divider */
+  --muted: 42 33 30; /* warm muted */
+  --accent: 74 34 24; /* ember glow base #4A2218 for selection */
   color-scheme: dark;
 }
 
@@ -86,7 +87,7 @@ body {
   overflow-wrap: anywhere;
 }
 .email-body p { margin: 0 0 0.75em; }
-.email-body a { color: var(--brand-600, #4f46e5); text-decoration: underline; }
+.email-body a { color: #bd3b2c; text-decoration: underline; }
 .email-body img { max-width: 100%; height: auto; border-radius: 6px; }
 .email-body ul,
 .email-body ol { margin: 0 0 0.75em 1.25em; list-style: revert; }

@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/fetcher";
 import { Button, Field, Input } from "@/components/ui";
+import { LanternLogo } from "@/components/LanternLogo";
 
 function LoginForm() {
   const router = useRouter();
@@ -31,12 +32,10 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-app px-4">
       <div className="w-full max-w-sm rounded-2xl border border-base bg-surface p-6 shadow-panel">
-        <div className="mb-6 flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-base font-bold text-white">
-            S
-          </span>
+        <div className="mb-6 flex items-center gap-3">
+          <LanternLogo height={36} />
           <div>
-            <div className="text-base font-semibold text-ink">Sir + Events</div>
+            <div className="font-serif text-xl font-semibold text-ink">Lantern</div>
             <div className="text-xs text-ink-muted">Event planning platform</div>
           </div>
         </div>

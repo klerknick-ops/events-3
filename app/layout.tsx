@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { can, PERMISSIONS, type Permission } from "@/lib/permissions";
 
 export const metadata: Metadata = {
-  title: "Sir + Events — Event Planning",
+  title: "Lantern — Event Planning",
   description:
     "Plan and manage events in bookable spaces. Timeline-first booking for restaurants & hotels.",
 };

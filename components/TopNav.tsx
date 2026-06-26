@@ -6,6 +6,7 @@ import { useState } from "react";
 import clsx from "clsx";
 import { useMe } from "./MeProvider";
 import { useTheme } from "./ThemeProvider";
+import { LanternLogo } from "./LanternLogo";
 import { ROLE_LABELS, type Permission, type Role } from "@/lib/permissions";
 
 const LINKS: {
@@ -36,11 +37,9 @@ export function TopNav() {
     <header className="sticky top-0 z-30 border-b border-base bg-surface/90 backdrop-blur">
       <div className="flex h-14 items-center gap-1 px-4">
         <Link href={isPlatform ? "/platform" : "/"} className="mr-4 flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-            S
-          </span>
-          <span className="text-sm font-semibold tracking-tight text-ink">
-            Sir + Events
+          <LanternLogo height={26} />
+          <span className="font-serif text-lg font-semibold tracking-tight text-ink">
+            Lantern
           </span>
           {isPlatform ? (
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
