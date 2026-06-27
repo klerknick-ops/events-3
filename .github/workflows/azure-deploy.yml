@@ -1,0 +1,33 @@
+# Build → migrate → deploy to Azure Container Apps.
+#
+# Manual trigger only (workflow_dispatch) so it stays dormant until Azure is set
+# up. Configure these first:
+#   Secrets:  AZURE_CREDENTIALS  (output of `az ad sp create-for-rbac --sdk-auth`)
+#   Variables: AZ_RG, AZ_ACR, AZ_APP, AZ_MIGRATE_JOB
+name: Deploy to Azure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build image in ACR
+        run: az acr build -r ${{ vars.AZ_ACR }} -t lantern:${{ github.sha }} -t lantern:latest .
+
+      - name: Run database migrations
+        run: az containerapp job start -n ${{ vars.AZ_MIGRATE_JOB }} -g ${{ vars.AZ_RG }}
+
+      - name: Update the app to the new image
+        run: |
+          az containerapp update \
+            -n ${{ vars.AZ_APP }} -g ${{ vars.AZ_RG }} \
+            --image ${{ vars.AZ_ACR }}.azurecr.io/lantern:${{ github.sha }}

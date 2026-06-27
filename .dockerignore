@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.github
+.env
+.env.*
+.data
+public/uploads
+npm-debug.log*
+README*.md
+*.log
+.DS_Store
+.vscode
+.idea
