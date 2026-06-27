@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { useMe } from "./MeProvider";
 import { useTheme } from "./ThemeProvider";
@@ -27,16 +27,42 @@ const LINKS: {
 export function TopNav() {
   const pathname = usePathname();
   const { user, permissions, organizationName } = useMe();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // No chrome on the login screen.
+  // Close the mobile menu whenever the route changes.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  // No chrome on the login screen. (Hooks above run unconditionally.)
   if (pathname === "/login" || !user) return null;
 
   const isPlatform = user.isPlatformAdmin && !user.organizationId;
 
+  const navLinks = isPlatform
+    ? [{ href: "/platform", label: "Organizations", exact: false }]
+    : LINKS.filter((l) => !l.perm || permissions[l.perm]);
+
+  const isActive = (href: string, exact?: boolean) =>
+    exact ? pathname === href : pathname.startsWith(href);
+
   return (
     <header className="sticky top-0 z-30 border-b border-base bg-surface/90 backdrop-blur">
-      <div className="flex h-14 items-center gap-1 px-4">
-        <Link href={isPlatform ? "/platform" : "/"} className="mr-4 flex items-center gap-2">
+      <div className="flex h-14 items-center gap-1 px-3 sm:px-4">
+        {/* Hamburger — mobile only */}
+        <button
+          onClick={() => setMenuOpen((o) => !o)}
+          className="mr-1 flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-muted hover:text-ink md:hidden"
+          aria-label="Menu"
+          aria-expanded={menuOpen}
+        >
+          {menuOpen ? "✕" : "☰"}
+        </button>
+
+        <Link
+          href={isPlatform ? "/platform" : "/"}
+          className="mr-2 flex items-center gap-2 md:mr-4"
+        >
           <LanternLogo height={26} />
           <span className="font-serif text-lg font-semibold tracking-tight text-ink">
             Lantern
@@ -46,47 +72,54 @@ export function TopNav() {
               Platform
             </span>
           ) : organizationName ? (
-            <span className="hidden text-xs text-ink-muted sm:inline">· {organizationName}</span>
+            <span className="hidden text-xs text-ink-muted lg:inline">· {organizationName}</span>
           ) : null}
         </Link>
-        {isPlatform ? (
-          <nav className="flex items-center gap-1">
+
+        {/* Desktop nav */}
+        <nav className="hidden items-center gap-1 md:flex">
+          {navLinks.map((l) => (
             <Link
-              href="/platform"
-              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-600/20 dark:text-brand-300"
+              key={l.href}
+              href={l.href}
+              className={clsx(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                isActive(l.href, l.exact)
+                  ? "bg-accent text-brand-700 dark:bg-brand-600/20 dark:text-brand-300"
+                  : "text-ink-muted hover:bg-muted hover:text-ink",
+              )}
             >
-              Organizations
+              {l.label}
             </Link>
-          </nav>
-        ) : (
-          <nav className="flex items-center gap-1">
-            {LINKS.filter((l) => !l.perm || permissions[l.perm]).map((l) => {
-            const active = l.exact
-              ? pathname === l.href
-              : pathname.startsWith(l.href);
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={clsx(
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-accent text-brand-700 dark:bg-brand-600/20 dark:text-brand-300"
-                    : "text-ink-muted hover:bg-muted hover:text-ink",
-                )}
-              >
-                {l.label}
-              </Link>
-            );
-          })}
-          </nav>
-        )}
+          ))}
+        </nav>
 
         <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />
           <UserMenu name={user.name} role={user.role} />
         </div>
       </div>
+
+      {/* Mobile dropdown menu */}
+      {menuOpen ? (
+        <nav className="space-y-0.5 border-t border-base bg-surface px-2 py-2 md:hidden">
+          {navLinks.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              onClick={() => setMenuOpen(false)}
+              className={clsx(
+                "block rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isActive(l.href, l.exact)
+                  ? "bg-accent text-brand-700 dark:bg-brand-600/20 dark:text-brand-300"
+                  : "text-ink-soft hover:bg-muted hover:text-ink",
+              )}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
     </header>
   );
 }
