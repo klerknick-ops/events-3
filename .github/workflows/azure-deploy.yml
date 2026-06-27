@@ -21,7 +21,7 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Build image in ACR
-        run: az acr build -r ${{ vars.AZ_ACR }} -t lantern:${{ github.sha }} -t lantern:latest .
+        run: az acr build -r ${{ vars.AZ_ACR }} -t lantern:${{ github.sha }} -t lantern:latest -f Dockerfile.azure .
 
       - name: Run database migrations
         run: az containerapp job start -n ${{ vars.AZ_MIGRATE_JOB }} -g ${{ vars.AZ_RG }}

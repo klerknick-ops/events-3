@@ -1,6 +1,7 @@
 # Deploying Lantern to Azure
 
-The app ships as a single container image (see `Dockerfile`). The recommended
+The app ships as a single container image (see `Dockerfile.azure` — named so
+Railway's nixpacks builder ignores it). The recommended
 host is **Azure Container Apps** with **Azure Database for PostgreSQL – Flexible
 Server** and an **Azure Container Registry (ACR)**. This mirrors the Railway
 setup (one web service + Postgres + migrations run once per release).
@@ -63,7 +64,9 @@ pg_restore --no-owner --no-privileges -d "$DATABASE_URL" lantern.dump
 
 ```bash
 # Builds in the cloud from this repo — no local Docker needed.
-az acr build -r $ACR -t lantern:latest .
+# The image build file is Dockerfile.azure (named so Railway's nixpacks builder
+# ignores it; pass it explicitly with -f).
+az acr build -r $ACR -t lantern:latest -f Dockerfile.azure .
 ```
 
 ## 4. Container Apps environment + app
@@ -130,7 +133,7 @@ az containerapp job start -n lantern-migrate -g $RG
 ## 6. Subsequent deploys
 
 ```bash
-az acr build -r $ACR -t lantern:latest .
+az acr build -r $ACR -t lantern:latest -f Dockerfile.azure .
 az containerapp job start -n lantern-migrate -g $RG      # apply any new migrations
 az containerapp update -n $APP -g $RG --image $ACR.azurecr.io/lantern:latest
 ```
@@ -148,6 +151,8 @@ trigger) to do build → migrate → update from CI.
 | `R2_ACCOUNT_ID/ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET/PUBLIC_BASE_URL` | image storage (keep R2, or migrate to Azure Blob later) |
 
 ## Notes / decisions
+- The build file is named `Dockerfile.azure` (not `Dockerfile`) so Railway keeps
+  using its nixpacks builder; Azure references it with `-f Dockerfile.azure`.
 - The image keeps full `node_modules` so `prisma migrate deploy` and pdfkit fonts
   work; it isn't a slim `standalone` build. Fine for an internal app.
 - No git-push auto-deploy like Railway — use the commands above or the Action.
