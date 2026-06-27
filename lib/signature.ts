@@ -48,6 +48,8 @@ export type SignatureBlock = SigText | SigImage | SigLinks | SigSocial | SigBann
 export interface SignatureVars {
   user_name: string;
   user_email: string;
+  user_title: string;
+  user_phone: string;
   org: string;
 }
 
@@ -57,6 +59,8 @@ function substitute(s: string, vars: SignatureVars): string {
   return s
     .replaceAll("{{user_name}}", vars.user_name)
     .replaceAll("{{user_email}}", vars.user_email)
+    .replaceAll("{{user_title}}", vars.user_title)
+    .replaceAll("{{user_phone}}", vars.user_phone)
     .replaceAll("{{org}}", vars.org);
 }
 function esc(s: string): string {
@@ -84,7 +88,10 @@ const ACCENT = "#bd3b2c";
 const INK = "#161213";
 
 export function renderSignatureHtml(blocks: SignatureBlock[], vars: SignatureVars): string {
-  const rows = blocks.map((b) => `<tr><td style="padding:2px 0;">${renderBlock(b, vars)}</td></tr>`);
+  const rows = blocks
+    .map((b) => renderBlock(b, vars))
+    .filter((html) => html.trim() !== "") // drop empty rows (e.g. a blank {{user_phone}})
+    .map((html) => `<tr><td style="padding:2px 0;">${html}</td></tr>`);
   return (
     `<table cellpadding="0" cellspacing="0" border="0" ` +
     `style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.45;color:${INK};border-collapse:collapse;">` +
@@ -96,6 +103,9 @@ export function renderSignatureHtml(blocks: SignatureBlock[], vars: SignatureVar
 function renderBlock(b: SignatureBlock, vars: SignatureVars): string {
   switch (b.type) {
     case "text": {
+      // Drop the whole line if it resolves to nothing (e.g. a blank
+      // {{user_phone}} for a user without a phone).
+      if (substitute(b.text, vars).trim() === "") return "";
       const styles = [
         `font-size:${b.fontSize ?? 13}px`,
         b.bold ? "font-weight:bold" : "",
@@ -163,8 +173,8 @@ function renderBlock(b: SignatureBlock, vars: SignatureVars): string {
 // Starter template matching the reference signature structure (fully editable).
 export const STARTER_SIGNATURE: SignatureBlock[] = [
   { type: "text", text: "{{user_name}}", bold: true, fontSize: 16 },
-  { type: "text", text: "Event Manager", italic: true, fontSize: 13, color: "#555555" },
-  { type: "text", text: "T +31 20 123 4567  ·  M +31 6 1234 5678", fontSize: 12, color: "#555555" },
+  { type: "text", text: "{{user_title}}", italic: true, fontSize: 13, color: "#555555" },
+  { type: "text", text: "{{user_phone}}", fontSize: 12, color: "#555555" },
   { type: "text", text: "{{org}}", bold: true, fontSize: 13 },
   {
     type: "links",

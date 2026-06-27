@@ -74,6 +74,8 @@ export default function EmailSignaturePage() {
   const previewHtml = renderSignatureHtml(blocks as SignatureBlock[], {
     user_name: me.user?.name ?? "Your Name",
     user_email: me.user?.email ?? "you@venue.com",
+    user_title: me.user?.title ?? "Job Title",
+    user_phone: me.user?.phone ?? "T +31 20 000 0000",
     org: me.organizationName ?? "Your Company",
   });
 
@@ -89,11 +91,14 @@ export default function EmailSignaturePage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-ink-muted">
-          Build the company email signature from stacked blocks. Use{" "}
-          <code className="rounded bg-muted px-1">{"{{user_name}}"}</code> for the dynamic sender
-          name (also <code className="rounded bg-muted px-1">{"{{org}}"}</code> and{" "}
-          <code className="rounded bg-muted px-1">{"{{user_email}}"}</code>). It loads automatically
-          at the bottom of every composed email.
+          Build the company email signature from stacked blocks. Dynamic fields, replaced per
+          sender:{" "}
+          <code className="rounded bg-muted px-1">{"{{user_name}}"}</code>,{" "}
+          <code className="rounded bg-muted px-1">{"{{user_title}}"}</code>,{" "}
+          <code className="rounded bg-muted px-1">{"{{user_phone}}"}</code>,{" "}
+          <code className="rounded bg-muted px-1">{"{{user_email}}"}</code>,{" "}
+          <code className="rounded bg-muted px-1">{"{{org}}"}</code>. It loads automatically at the
+          bottom of every composed email. (Set each person&rsquo;s title &amp; phone in Users.)
         </p>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={() => setBlocks(STARTER_SIGNATURE as Block[])}>

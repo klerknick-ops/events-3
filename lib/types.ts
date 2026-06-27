@@ -69,6 +69,8 @@ export interface UserAccount {
   email: string;
   name: string;
   role: "ADMIN" | "MANAGER" | "STAFF";
+  title: string | null;
+  phone: string | null;
   active: boolean;
   createdAt: string;
 }

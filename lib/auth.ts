@@ -40,6 +40,8 @@ export interface SessionUser {
   email: string;
   name: string;
   role: string;
+  title: string | null;
+  phone: string | null;
   organizationId: string | null;
   isPlatformAdmin: boolean;
 }
@@ -57,8 +59,8 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   if (!session || session.expiresAt < new Date() || !session.user.active) {
     return null;
   }
-  const { id, email, name, role, organizationId, isPlatformAdmin } = session.user;
-  return { id, email, name, role, organizationId, isPlatformAdmin };
+  const { id, email, name, role, title, phone, organizationId, isPlatformAdmin } = session.user;
+  return { id, email, name, role, title, phone, organizationId, isPlatformAdmin };
 }
 
 // For API routes: returns the user or throws a Response (handled by `route`).

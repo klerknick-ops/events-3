@@ -10,6 +10,8 @@ const publicSelect = {
   email: true,
   name: true,
   role: true,
+  title: true,
+  phone: true,
   active: true,
   createdAt: true,
 } as const;
@@ -28,6 +30,8 @@ const schema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   role: z.enum(ROLES),
+  title: z.string().trim().nullish(),
+  phone: z.string().trim().nullish(),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
@@ -43,6 +47,8 @@ export const POST = route(async (req) => {
       email,
       name: body.name.trim(),
       role: body.role,
+      title: body.title || null,
+      phone: body.phone || null,
       passwordHash: hashPassword(body.password),
     },
     select: publicSelect,

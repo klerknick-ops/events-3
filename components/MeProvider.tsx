@@ -9,6 +9,8 @@ export interface Me {
     email: string;
     name: string;
     role: string;
+    title: string | null;
+    phone: string | null;
     organizationId: string | null;
     isPlatformAdmin: boolean;
   } | null;

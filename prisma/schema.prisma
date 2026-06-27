@@ -52,6 +52,8 @@ model User {
   name            String
   passwordHash    String
   role            String        @default("STAFF") // ADMIN | MANAGER | STAFF
+  title           String?       // job title (used in email signatures)
+  phone           String?       // direct phone (used in email signatures)
   active          Boolean       @default(true)
   isPlatformAdmin Boolean       @default(false) // provisions orgs; not org-scoped
   organizationId  String?

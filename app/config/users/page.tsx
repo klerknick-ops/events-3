@@ -83,6 +83,7 @@ export default function UsersPage() {
                 </div>
                 <div className="text-xs text-ink-muted">
                   {u.email} · {ROLE_LABELS[u.role]}
+                  {u.title ? ` · ${u.title}` : ""}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -142,6 +143,8 @@ function UserForm({
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [role, setRole] = useState<Role>(user?.role ?? "STAFF");
+  const [title, setTitle] = useState(user?.title ?? "");
+  const [phone, setPhone] = useState(user?.phone ?? "");
   const [active, setActive] = useState(user?.active ?? true);
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -159,6 +162,8 @@ function UserForm({
         await api.patch(`/api/users/${user.id}`, {
           name: name.trim(),
           role,
+          title: title.trim() || null,
+          phone: phone.trim() || null,
           active,
           ...(password ? { password } : {}),
         });
@@ -167,6 +172,8 @@ function UserForm({
           name: name.trim(),
           email: email.trim(),
           role,
+          title: title.trim() || null,
+          phone: phone.trim() || null,
           password,
         });
       }
@@ -215,6 +222,14 @@ function UserForm({
             ))}
           </Select>
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Job title" hint="Used in the email signature.">
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event Manager" />
+          </Field>
+          <Field label="Direct phone" hint="Used in the email signature.">
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+31 6 1234 5678" />
+          </Field>
+        </div>
         <Field
           label={user ? "Reset password (optional)" : "Password"}
           hint={user ? "Leave blank to keep the current password." : undefined}

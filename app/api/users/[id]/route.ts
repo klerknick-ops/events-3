@@ -13,6 +13,8 @@ const publicSelect = {
   email: true,
   name: true,
   role: true,
+  title: true,
+  phone: true,
   active: true,
   createdAt: true,
 } as const;
@@ -20,6 +22,8 @@ const publicSelect = {
 const schema = z.object({
   name: z.string().min(1).optional(),
   role: z.enum(ROLES).optional(),
+  title: z.string().trim().nullable().optional(),
+  phone: z.string().trim().nullable().optional(),
   active: z.boolean().optional(),
   password: z.string().min(6).optional(),
 });
@@ -44,6 +48,8 @@ export const PATCH = route(async (req: Request, ctx: Ctx) => {
     data: {
       name: body.name,
       role: body.role,
+      title: body.title === undefined ? undefined : body.title || null,
+      phone: body.phone === undefined ? undefined : body.phone || null,
       active: body.active,
       passwordHash: body.password ? hashPassword(body.password) : undefined,
     },

@@ -27,6 +27,8 @@ export const GET = route(async () => {
   const html = renderSignatureHtml(blocks, {
     user_name: user.name,
     user_email: user.email,
+    user_title: user.title ?? "",
+    user_phone: user.phone ?? "",
     org: org?.name ?? "",
   });
 
