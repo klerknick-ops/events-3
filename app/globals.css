@@ -19,15 +19,17 @@
 }
 
 .dark {
-  --ink: 247 239 224; /* parchment text #F7EFE0 */
-  --ink-soft: 224 214 196; /* dim parchment */
-  --ink-muted: 168 158 142; /* warm gray */
-  --app: 22 18 19; /* ink #161213 */
-  --surface: 31 26 26; /* ink-card #1F1A1A */
-  --surface-2: 42 33 30; /* warmer raised */
-  --border: 64 46 42; /* red-tinted divider */
-  --muted: 42 33 30; /* warm muted */
-  --accent: 74 34 24; /* ember glow base #4A2218 for selection */
+  /* Neutral black dark mode — red is reserved for accents (buttons, active
+     states), not baked into the surfaces. */
+  --ink: 237 237 240; /* near-white text */
+  --ink-soft: 197 197 201; /* light gray */
+  --ink-muted: 138 138 143; /* mid gray */
+  --app: 9 9 10; /* near-black background */
+  --surface: 20 20 22; /* dark neutral card */
+  --surface-2: 30 30 33; /* raised neutral */
+  --border: 42 42 46; /* neutral divider */
+  --muted: 30 30 33; /* neutral muted */
+  --accent: 64 26 22; /* subtle red accent for selected/highlight bg */
   color-scheme: dark;
 }
 
