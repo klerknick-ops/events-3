@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { useMe } from "./MeProvider";
@@ -49,16 +49,6 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-30 border-b border-base bg-surface/90 backdrop-blur">
       <div className="flex h-14 items-center gap-1 px-3 sm:px-4">
-        {/* Hamburger — mobile only */}
-        <button
-          onClick={() => setMenuOpen((o) => !o)}
-          className="mr-1 flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-muted hover:text-ink md:hidden"
-          aria-label="Menu"
-          aria-expanded={menuOpen}
-        >
-          {menuOpen ? "✕" : "☰"}
-        </button>
-
         <Link
           href={isPlatform ? "/platform" : "/"}
           className="mr-2 flex items-center gap-2 md:mr-4"
@@ -95,8 +85,16 @@ export function TopNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
-          <ThemeToggle />
           <UserMenu name={user.name} role={user.role} />
+          {/* Hamburger — mobile only, on the right */}
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-muted hover:text-ink md:hidden"
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? "✕" : "☰"}
+          </button>
         </div>
       </div>
 
@@ -124,23 +122,9 @@ export function TopNav() {
   );
 }
 
-function ThemeToggle() {
-  const { theme, toggle } = useTheme();
-  return (
-    <button
-      onClick={toggle}
-      className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-muted hover:text-ink"
-      title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      aria-label="Toggle theme"
-    >
-      {theme === "dark" ? "☀️" : "🌙"}
-    </button>
-  );
-}
-
 function UserMenu({ name, role }: { name: string; role: string }) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const { theme, toggle } = useTheme();
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -175,6 +159,14 @@ function UserMenu({ name, role }: { name: string; role: string }) {
                 {ROLE_LABELS[role as Role] ?? role}
               </div>
             </div>
+            <div className="my-1 border-t border-base" />
+            <button
+              onClick={toggle}
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-ink-soft hover:bg-muted"
+            >
+              <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+              <span aria-hidden>{theme === "dark" ? "☀️" : "🌙"}</span>
+            </button>
             <div className="my-1 border-t border-base" />
             {role === "ADMIN" ? (
               <Link
