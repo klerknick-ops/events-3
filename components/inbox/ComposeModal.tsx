@@ -7,10 +7,11 @@ import { Modal } from "@/components/Modal";
 import { useMe } from "@/components/MeProvider";
 import { EventLinkSelect } from "./EventLinkSelect";
 import { OwnerSelect } from "./OwnerSelect";
+import { EmailBody } from "./EmailBody";
 
 interface Signature {
   html: string;
-  source: "exclaimer-api" | "static" | "generated";
+  source: string;
   note: string;
 }
 
@@ -20,9 +21,21 @@ function fmtSize(n: number) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// Compose a new email through the connected mailbox. The user's Exclaimer
-// signature is auto-loaded; the message can carry CC, file attachments, a link
-// to an event, and an optional follow-up task created before sending.
+// Turn the composer's message into HTML: reply/forward presets already contain
+// HTML (quoted thread); a freshly-typed plain message gets newline → <br>.
+function messageToHtml(body: string): string {
+  if (/<[a-z][\s\S]*>/i.test(body)) return body;
+  const escaped = body
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return escaped.replace(/\n/g, "<br>");
+}
+
+// Compose a new email through the connected mailbox. The org's native signature
+// is auto-loaded (with the current user's name) and shown in a rendered preview;
+// the message can carry CC, file attachments, a link to an event, and an
+// optional follow-up task created before sending.
 export function ComposeModal({
   onClose,
   onSent,
@@ -46,9 +59,9 @@ export function ComposeModal({
   const [eventId, setEventId] = useState<string | null>(presetEventId ?? null);
   const [files, setFiles] = useState<File[]>([]);
   const [sig, setSig] = useState<Signature | null>(null);
+  const [includeSig, setIncludeSig] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sigInserted, setSigInserted] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Pre-send task (Section 6). Assignee defaults to the current user (Phase 6 §5).
@@ -58,17 +71,21 @@ export function ComposeModal({
   const [taskDue, setTaskDue] = useState("");
   const [taskAssigneeId, setTaskAssigneeId] = useState<string | null>(me.user?.id ?? null);
 
-  // Auto-load the Exclaimer signature and append it to the (empty) body.
+  // Auto-load the native signature (rendered, with the current user's name).
+  // Kept separate from the editable message so it renders cleanly rather than
+  // appearing as raw markup in the textarea.
   useEffect(() => {
     api
       .get<Signature>("/api/inbox/signature")
-      .then((s) => {
-        setSig(s);
-        setBody((b) => (b ? b : s.html));
-        setSigInserted(true);
-      })
+      .then((s) => setSig(s))
       .catch(() => setSig(null));
   }, []);
+
+  // Final HTML sent: the message, then the signature (if kept).
+  function finalBodyHtml(): string {
+    const msg = messageToHtml(body);
+    return includeSig && sig ? `${msg}<br><br>${sig.html}` : msg;
+  }
 
   function addFiles(list: FileList | null) {
     if (!list) return;
@@ -88,7 +105,7 @@ export function ComposeModal({
       fd.set("to", to);
       fd.set("cc", cc);
       fd.set("subject", subject);
-      fd.set("body", body);
+      fd.set("body", finalBodyHtml());
       if (eventId) fd.set("eventId", eventId);
       if (addTask && taskTitle.trim()) {
         fd.set("taskTitle", taskTitle);
@@ -168,26 +185,30 @@ export function ComposeModal({
         </Field>
         <Field label="Message">
           <Textarea
-            rows={9}
+            rows={7}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            className="font-mono text-xs"
+            placeholder="Write your message…"
           />
           {sig ? (
-            <div className="mt-1 flex items-center justify-between text-xs text-ink-muted">
-              <span>
-                {sigInserted ? "Signature inserted. " : ""}
-                {sig.note}
-              </span>
-              <button
-                type="button"
-                className="text-brand-600 hover:underline dark:text-brand-300"
-                onClick={() => setBody((b) => b + sig.html)}
-              >
-                Re-insert signature
-              </button>
-            </div>
+            <label className="mt-1.5 flex items-center gap-2 text-xs text-ink-muted">
+              <input
+                type="checkbox"
+                checked={includeSig}
+                onChange={(e) => setIncludeSig(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-base"
+              />
+              {sig.note}
+            </label>
           ) : null}
+          {/* Rendered preview (Outlook-style), including the auto-loaded
+              signature — never raw markup. */}
+          <div className="mt-2 rounded-lg border border-base bg-surface-2 p-3">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+              Preview
+            </div>
+            <EmailBody html={finalBodyHtml()} isHtml />
+          </div>
         </Field>
 
         {/* Attachments */}

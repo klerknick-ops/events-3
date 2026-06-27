@@ -7,12 +7,21 @@
 // falls back to a local demo dataset (see lib/mail/sync.ts), so the feature is
 // fully usable in development.
 //
-// REAL SETUP REQUIRED (outside what this code can do for you):
+// AUTH MODEL: client credentials flow with APPLICATION permissions (app-only,
+// no signed-in user). This is the correct model for a *shared* business mailbox
+// — the connection must not depend on any individual staff member's account
+// staying active. (A future "Sign in with Microsoft" staff login would be a
+// separate concern and would use authorization code + PKCE — not this.)
+//
+// REAL SETUP REQUIRED (one-time, outside what this code can do for you):
 //   1. Register an app in Azure AD (Entra ID).
-//   2. Grant the application Microsoft Graph permission `Mail.ReadWrite` and
-//      `Mail.Send` (Application permissions) and admin-consent them.
+//   2. Grant Microsoft Graph APPLICATION permissions `Mail.Read`, `Mail.Send`
+//      and `Mail.ReadWrite`, then grant tenant admin consent.
 //   3. Create a client secret.
-//   4. Set these env vars on the server:
+//   4. Scope the app to ONLY the shared mailbox with an Exchange Online
+//      application access policy (New-ApplicationAccessPolicy), so app-only
+//      access is limited to that one mailbox rather than the whole tenant.
+//   5. Set these env vars on the server:
 //        MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET,
 //        MS_GRAPH_MAILBOX   (the business mailbox UPN / address to send+receive)
 // ---------------------------------------------------------------------------

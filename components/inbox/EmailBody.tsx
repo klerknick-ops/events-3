@@ -23,10 +23,13 @@ export function EmailBody({
         .replace(/>/g, "&gt;");
       return `<p style="white-space:pre-wrap">${escaped}</p>`;
     }
+    // Keep inline `style` so formatted mail + the native signature render like a
+    // real mail client. DOMPurify still sanitises style values and strips
+    // scripts, event handlers, iframes and forms.
     return DOMPurify.sanitize(html || "", {
       USE_PROFILES: { html: true },
       FORBID_TAGS: ["style", "script", "iframe", "form", "input", "button"],
-      FORBID_ATTR: ["style", "onerror", "onload", "onclick"],
+      FORBID_ATTR: ["onerror", "onload", "onclick"],
       ALLOW_DATA_ATTR: false,
     });
   }, [html, isHtml]);
