@@ -1,7 +1,7 @@
 import { prisma } from "../db";
 import { saveBytes } from "../storage";
 import { runActionRules } from "../action-tasks";
-import { fetchInbox, isGraphConfigured, type IncomingMessage } from "./graph";
+import { fetchInbox, connectionStatus, type IncomingMessage } from "./graph";
 
 // ---------------------------------------------------------------------------
 // Sync inbound mail into EmailMessage rows and auto-link client emails.
@@ -101,11 +101,12 @@ export interface SyncResult {
 }
 
 export async function syncMailbox(orgId: string): Promise<SyncResult> {
-  if (!isGraphConfigured()) {
+  const status = await connectionStatus(orgId);
+  if (!status.configured) {
     const created = await seedDemoInbox(orgId);
     return { configured: false, fetched: created, created };
   }
-  const messages = await fetchInbox(40);
+  const messages = await fetchInbox(orgId, 40);
   const before = await prisma.emailMessage.count({ where: { organizationId: orgId } });
   for (const m of messages) await upsertIncoming(orgId, m);
   const after = await prisma.emailMessage.count({ where: { organizationId: orgId } });

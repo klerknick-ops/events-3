@@ -14,6 +14,7 @@ const TABS: { href: string; label: string; perm?: "MANAGE_USERS" }[] = [
   { href: "/config/notification-rules", label: "Notification Rules" },
   { href: "/config/sheet-templates", label: "Document Templates" },
   { href: "/config/email-signature", label: "Email Signature" },
+  { href: "/config/inbox", label: "Microsoft 365" },
   { href: "/config/policy", label: "Cancellation Policy" },
   { href: "/config/payment-terms", label: "Payment Terms" },
   { href: "/config/budgets", label: "Budgets" },

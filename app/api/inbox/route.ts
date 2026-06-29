@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ok, route } from "@/lib/api";
 import { requireOrgPermission } from "@/lib/tenant";
-import { configuredMailbox, isGraphConfigured } from "@/lib/mail/graph";
+import { connectionStatus } from "@/lib/mail/graph";
 
 // List synced emails (soft-deleted ones excluded).
 //  ?view=client                 → Client Mail: auto-matched to a contact-with-event
@@ -68,9 +68,10 @@ export const GET = route(async (req) => {
     archived: await prisma.emailMessage.count({ where: { ...base, archivedAt: { not: null } } }),
   };
 
+  const status = await connectionStatus(orgId);
   return ok({
-    configured: isGraphConfigured(),
-    mailbox: configuredMailbox(),
+    configured: status.configured,
+    mailbox: status.mailbox,
     counts,
     messages,
   });

@@ -57,13 +57,16 @@ export const POST = route(async (req) => {
     outgoing.push({ filename: file.name, contentType, contentBytes: buf.toString("base64") });
   }
 
-  const result = await sendMail({
-    to: recipients,
-    cc: ccList,
-    subject,
-    body,
-    attachments: outgoing,
-  });
+  const result = await sendMail(
+    {
+      to: recipients,
+      cc: ccList,
+      subject,
+      body,
+      attachments: outgoing,
+    },
+    orgId,
+  );
 
   const message = await prisma.emailMessage.create({
     data: {

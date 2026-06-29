@@ -26,11 +26,60 @@
 //        MS_GRAPH_MAILBOX   (the business mailbox UPN / address to send+receive)
 // ---------------------------------------------------------------------------
 
+import { prisma } from "../db";
+
 export interface GraphConfig {
   tenantId: string;
   clientId: string;
   clientSecret: string;
   mailbox: string;
+}
+
+// Per-org connection stored in Settings (key below) via the in-app
+// "Connect Microsoft 365" screen; falls back to env vars if unset.
+export const MS_GRAPH_SETTING_KEY = "ms_graph";
+
+export interface StoredGraphConfig {
+  tenantId?: string;
+  clientId?: string;
+  clientSecret?: string;
+  mailbox?: string;
+  consentedAt?: string | null;
+}
+
+export async function getStoredConfig(orgId: string): Promise<StoredGraphConfig | null> {
+  const row = await prisma.setting.findUnique({
+    where: { organizationId_key: { organizationId: orgId, key: MS_GRAPH_SETTING_KEY } },
+  });
+  if (!row?.value) return null;
+  try {
+    return JSON.parse(row.value) as StoredGraphConfig;
+  } catch {
+    return null;
+  }
+}
+
+// Resolve the effective Graph config for an org: the in-app connection if
+// complete, otherwise the env-var fallback (legacy / single-tenant).
+export async function loadGraphConfig(orgId: string): Promise<GraphConfig | null> {
+  const s = await getStoredConfig(orgId);
+  if (s?.tenantId && s.clientId && s.clientSecret && s.mailbox) {
+    return { tenantId: s.tenantId, clientId: s.clientId, clientSecret: s.clientSecret, mailbox: s.mailbox };
+  }
+  return getGraphConfig();
+}
+
+// Non-secret status for the UI.
+export async function connectionStatus(
+  orgId: string,
+): Promise<{ configured: boolean; mailbox: string | null; source: "app" | "env" | null; consentedAt: string | null }> {
+  const s = await getStoredConfig(orgId);
+  if (s?.tenantId && s.clientId && s.clientSecret && s.mailbox) {
+    return { configured: true, mailbox: s.mailbox, source: "app", consentedAt: s.consentedAt ?? null };
+  }
+  const env = getGraphConfig();
+  if (env) return { configured: true, mailbox: env.mailbox, source: "env", consentedAt: null };
+  return { configured: false, mailbox: null, source: null, consentedAt: null };
 }
 
 export interface IncomingAttachment {
@@ -159,8 +208,8 @@ async function fetchAttachments(
 
 // Fetch the most recent messages from the configured mailbox. Returns [] when
 // not configured (callers fall back to the demo dataset).
-export async function fetchInbox(limit = 25): Promise<IncomingMessage[]> {
-  const cfg = getGraphConfig();
+export async function fetchInbox(orgId: string, limit = 25): Promise<IncomingMessage[]> {
+  const cfg = await loadGraphConfig(orgId);
   if (!cfg) return [];
   const token = await getAccessToken(cfg);
   const url =
@@ -193,10 +242,37 @@ export async function fetchInbox(limit = 25): Promise<IncomingMessage[]> {
   );
 }
 
+// Verify the connection: acquire an app-only token and read one message from
+// the configured mailbox. Surfaces the most common misconfig errors clearly.
+export async function testConnection(
+  orgId: string,
+): Promise<{ ok: boolean; mailbox?: string; error?: string }> {
+  const cfg = await loadGraphConfig(orgId);
+  if (!cfg) return { ok: false, error: "No connection configured." };
+  try {
+    const token = await getAccessToken(cfg);
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(cfg.mailbox)}/messages?$top=1&$select=id`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (res.ok) return { ok: true, mailbox: cfg.mailbox };
+    const text = await res.text();
+    let hint = `${res.status}`;
+    if (res.status === 403)
+      hint =
+        "403 — admin consent missing, or the app isn't allowed on this mailbox (check the application access policy).";
+    else if (res.status === 401) hint = "401 — wrong tenant/client/secret.";
+    else if (res.status === 404) hint = "404 — mailbox address not found.";
+    return { ok: false, error: `${hint} ${text.slice(0, 200)}` };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // Send an email through the configured mailbox. In demo mode (no credentials)
 // this is a no-op that logs, so compose still works locally.
-export async function sendMail(input: SendMessageInput): Promise<{ sent: boolean }> {
-  const cfg = getGraphConfig();
+export async function sendMail(input: SendMessageInput, orgId: string): Promise<{ sent: boolean }> {
+  const cfg = await loadGraphConfig(orgId);
   if (!cfg) {
     console.log(
       "[mail] (demo, not sent) →",
