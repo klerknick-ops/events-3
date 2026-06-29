@@ -1,0 +1,36 @@
+# Build on a GitHub runner and deploy a prebuilt artifact to Azure App Service.
+# Server-side Oryx build is disabled (SCM_DO_BUILD_DURING_DEPLOYMENT=false); the
+# app's startup command runs `prisma migrate deploy` then `next start`.
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: azure-appservice
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_CURRENCY: EUR
+      # Drop dev-only deps from the shipped artifact (prisma + @prisma/client are
+      # runtime deps and stay, so migrate deploy works on the server).
+      - run: npm prune --omit=dev
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: lantern-events
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
