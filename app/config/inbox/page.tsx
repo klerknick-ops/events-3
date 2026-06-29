@@ -11,7 +11,10 @@ interface Connection {
   hasSecret: boolean;
   consentedAt: string | null;
   configured: boolean;
-  source: "app" | "env" | null;
+  mode: "delegated" | "app" | "env" | null;
+  connectedUserEmail: string | null;
+  connectedUserName: string | null;
+  connectedAt: string | null;
 }
 
 export default function InboxConnectionPage() {
@@ -42,9 +45,10 @@ export default function InboxConnectionPage() {
     setOrigin(window.location.origin);
     // Surface the consent redirect result.
     const p = new URLSearchParams(window.location.search);
-    if (p.get("consent") === "ok") setBanner({ kind: "ok", text: "Admin consent granted — the app can now access the mailbox." });
-    else if (p.get("consent") === "error") setBanner({ kind: "err", text: "Consent failed: " + (p.get("desc") || "unknown error") });
-    if (p.get("consent")) window.history.replaceState({}, "", "/config/inbox");
+    if (p.get("connected")) setBanner({ kind: "ok", text: `Connected as ${decodeURIComponent(p.get("connected")!)}.` });
+    else if (p.get("consent") === "ok") setBanner({ kind: "ok", text: "Admin consent granted — the app can now access the mailbox." });
+    else if (p.get("consent") === "error") setBanner({ kind: "err", text: "Failed: " + (p.get("desc") || "unknown error") });
+    if (p.get("consent") || p.get("connected")) window.history.replaceState({}, "", "/config/inbox");
     load();
   }, []);
 
@@ -84,6 +88,13 @@ export default function InboxConnectionPage() {
     setTestResult({ ok: r.ok, text: r.ok ? `Connected to ${r.mailbox}.` : r.error || "Failed." });
   }
 
+  async function disconnect() {
+    if (!confirm("Disconnect the Microsoft 365 sign-in? The inbox will stop syncing until reconnected.")) return;
+    await api.del("/api/inbox/connection");
+    await load();
+    setBanner({ kind: "ok", text: "Disconnected." });
+  }
+
   if (loading || !conn) {
     return (
       <div className="flex justify-center py-12 text-ink-muted">
@@ -97,9 +108,9 @@ export default function InboxConnectionPage() {
   return (
     <div className="max-w-2xl space-y-5">
       <p className="text-sm text-ink-muted">
-        Connect the shared business mailbox via Microsoft 365 (app-only, so it doesn&rsquo;t depend
-        on any one person&rsquo;s account). Enter the Azure app registration details, save, then grant
-        admin consent.
+        Connect the mailbox via Microsoft 365. Enter the Azure app registration details, <b>Save</b>,
+        then <b>Sign in with Microsoft</b> as the admin who owns the mailbox — the connection is tied
+        to that admin account. (An app-only alternative is available below.)
       </p>
 
       {banner ? (
@@ -117,25 +128,24 @@ export default function InboxConnectionPage() {
 
       {/* Status */}
       <Card className="p-4">
-        <div className="flex items-center gap-2 text-sm">
-          <span
-            className={
-              "inline-block h-2.5 w-2.5 rounded-full " +
-              (conn.configured && conn.consentedAt ? "bg-emerald-500" : conn.configured ? "bg-amber-500" : "bg-ink-muted")
-            }
-          />
-          <span className="font-medium text-ink">
-            {conn.configured && conn.consentedAt
-              ? "Connected"
-              : conn.configured
-                ? "Configured — consent pending"
-                : "Not connected (Inbox runs in demo mode)"}
-          </span>
-          {conn.source === "env" ? <span className="text-xs text-ink-muted">· via server env</span> : null}
-          {conn.consentedAt ? (
-            <span className="text-xs text-ink-muted">· consented {new Date(conn.consentedAt).toLocaleDateString()}</span>
-          ) : null}
-        </div>
+        {(() => {
+          const ready = conn.mode === "delegated" || conn.mode === "env" || (conn.mode === "app" && conn.consentedAt);
+          let label: string;
+          if (conn.mode === "delegated")
+            label = `Connected as ${conn.connectedUserName || conn.connectedUserEmail || "admin"}`;
+          else if (conn.mode === "env") label = "Connected (server env)";
+          else if (conn.mode === "app" && conn.consentedAt) label = "Connected (app-only)";
+          else if (conn.mode === "app") label = "Configured — grant admin consent to finish";
+          else label = "Not connected (Inbox runs in demo mode)";
+          return (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className={"inline-block h-2.5 w-2.5 rounded-full " + (ready ? "bg-emerald-500" : conn.configured ? "bg-amber-500" : "bg-ink-muted")} />
+              <span className="font-medium text-ink">{label}</span>
+              {conn.mailbox ? <span className="text-xs text-ink-muted">· mailbox: {conn.mailbox}</span> : null}
+              {conn.connectedAt ? <span className="text-xs text-ink-muted">· {new Date(conn.connectedAt).toLocaleDateString()}</span> : null}
+            </div>
+          );
+        })()}
       </Card>
 
       {/* Redirect URI to register */}
@@ -170,18 +180,40 @@ export default function InboxConnectionPage() {
         <Field label="Shared mailbox address">
           <Input value={mailbox} onChange={(e) => { setMailbox(e.target.value); setDirty(true); }} placeholder="events@yourdomain.com" />
         </Field>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </Button>
-          <Button variant="secondary" onClick={grantConsent} disabled={!canConsent} title={!canConsent ? "Save tenant, client ID and secret first" : ""}>
-            Grant admin consent
+          {/* Primary: connect as the signed-in admin (delegated) */}
+          <Button
+            onClick={() => (window.location.href = "/api/inbox/connect/login")}
+            disabled={!canConsent}
+            title={!canConsent ? "Save tenant, client ID and secret first" : ""}
+          >
+            {conn.mode === "delegated" ? "Re-connect Microsoft" : "Sign in with Microsoft"}
           </Button>
+          {conn.mode === "delegated" ? (
+            <Button variant="danger" onClick={disconnect}>
+              Disconnect
+            </Button>
+          ) : null}
           <Button variant="secondary" onClick={test} disabled={!conn.configured || dirty}>
             Test connection
           </Button>
         </div>
-        {dirty ? <p className="text-xs text-ink-muted">Save your changes before granting consent or testing.</p> : null}
+        {dirty ? <p className="text-xs text-ink-muted">Save your changes before signing in or testing.</p> : null}
+
+        {/* Alternative: app-only admin consent (not tied to a person) */}
+        <details className="text-xs text-ink-muted">
+          <summary className="cursor-pointer">Alternative: connect app-only (not tied to an admin)</summary>
+          <p className="mt-1">
+            Uses application permissions + admin consent instead of a personal sign-in. Survives
+            staff changes but ignores per-user mailbox access.
+          </p>
+          <Button className="mt-2" size="sm" variant="secondary" onClick={grantConsent} disabled={!canConsent}>
+            Grant admin consent (app-only)
+          </Button>
+        </details>
         {testResult ? (
           <p className={"text-sm " + (testResult.ok ? "text-emerald-600" : "text-rose-600")}>
             {testResult.ok ? "✓ " : "✕ "}
@@ -195,11 +227,11 @@ export default function InboxConnectionPage() {
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           <li>Entra admin center → App registrations → New registration (single tenant).</li>
           <li>Copy the Directory (tenant) ID and Application (client) ID into the fields above.</li>
-          <li>API permissions → Microsoft Graph → Application permissions → add Mail.Read, Mail.Send, Mail.ReadWrite.</li>
+          <li>API permissions → Microsoft Graph → add <b>Delegated</b> Mail.Read, Mail.Send, Mail.ReadWrite (for admin sign-in). For the app-only alternative also add the same as <b>Application</b> permissions + grant admin consent.</li>
           <li>Authentication → add the Redirect URI shown above (type: Web).</li>
           <li>Certificates &amp; secrets → New client secret → paste its Value above. Save.</li>
-          <li>Click “Grant admin consent”, then “Test connection”.</li>
-          <li>Optional: restrict the app to only this mailbox with an Exchange Online application access policy.</li>
+          <li>Click “Sign in with Microsoft”, then “Test connection”.</li>
+          <li>The mailbox can be the admin&rsquo;s own address, or a shared mailbox the admin has full access to.</li>
         </ol>
       </details>
     </div>

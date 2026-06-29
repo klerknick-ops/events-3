@@ -44,7 +44,26 @@ export interface StoredGraphConfig {
   clientId?: string;
   clientSecret?: string;
   mailbox?: string;
-  consentedAt?: string | null;
+  consentedAt?: string | null; // app-only admin consent
+  // Delegated ("Sign in with Microsoft") — connection tied to an admin user.
+  refreshToken?: string | null;
+  connectedUserEmail?: string | null;
+  connectedUserName?: string | null;
+  connectedAt?: string | null;
+}
+
+// Delegated scopes requested during the sign-in flow.
+export const DELEGATED_SCOPES =
+  "openid profile email offline_access https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite";
+
+async function patchStoredConfig(orgId: string, patch: Partial<StoredGraphConfig>): Promise<void> {
+  const existing = (await getStoredConfig(orgId)) ?? {};
+  const merged = { ...existing, ...patch };
+  await prisma.setting.upsert({
+    where: { organizationId_key: { organizationId: orgId, key: MS_GRAPH_SETTING_KEY } },
+    create: { organizationId: orgId, key: MS_GRAPH_SETTING_KEY, value: JSON.stringify(merged) },
+    update: { value: JSON.stringify(merged) },
+  });
 }
 
 export async function getStoredConfig(orgId: string): Promise<StoredGraphConfig | null> {
@@ -60,26 +79,58 @@ export async function getStoredConfig(orgId: string): Promise<StoredGraphConfig 
 }
 
 // Resolve the effective Graph config for an org: the in-app connection if
-// complete, otherwise the env-var fallback (legacy / single-tenant).
+// complete, otherwise the env-var fallback (legacy / single-tenant). For a
+// delegated (admin sign-in) connection the mailbox falls back to the connected
+// user's own address when no shared mailbox is set.
 export async function loadGraphConfig(orgId: string): Promise<GraphConfig | null> {
   const s = await getStoredConfig(orgId);
-  if (s?.tenantId && s.clientId && s.clientSecret && s.mailbox) {
-    return { tenantId: s.tenantId, clientId: s.clientId, clientSecret: s.clientSecret, mailbox: s.mailbox };
+  const mailbox = s?.mailbox || s?.connectedUserEmail || "";
+  if (s?.tenantId && s.clientId && s.clientSecret && mailbox) {
+    return { tenantId: s.tenantId, clientId: s.clientId, clientSecret: s.clientSecret, mailbox };
   }
   return getGraphConfig();
 }
 
 // Non-secret status for the UI.
-export async function connectionStatus(
-  orgId: string,
-): Promise<{ configured: boolean; mailbox: string | null; source: "app" | "env" | null; consentedAt: string | null }> {
+export async function connectionStatus(orgId: string): Promise<{
+  configured: boolean;
+  mailbox: string | null;
+  mode: "delegated" | "app" | "env" | null;
+  consentedAt: string | null;
+  connectedUserEmail: string | null;
+  connectedUserName: string | null;
+  connectedAt: string | null;
+}> {
   const s = await getStoredConfig(orgId);
-  if (s?.tenantId && s.clientId && s.clientSecret && s.mailbox) {
-    return { configured: true, mailbox: s.mailbox, source: "app", consentedAt: s.consentedAt ?? null };
+  const mailbox = s?.mailbox || s?.connectedUserEmail || null;
+  if (s?.tenantId && s.clientId && s.clientSecret) {
+    if (s.refreshToken) {
+      return {
+        configured: true,
+        mailbox,
+        mode: "delegated",
+        consentedAt: s.consentedAt ?? null,
+        connectedUserEmail: s.connectedUserEmail ?? null,
+        connectedUserName: s.connectedUserName ?? null,
+        connectedAt: s.connectedAt ?? null,
+      };
+    }
+    if (s.mailbox) {
+      return {
+        configured: true,
+        mailbox,
+        mode: "app",
+        consentedAt: s.consentedAt ?? null,
+        connectedUserEmail: null,
+        connectedUserName: null,
+        connectedAt: null,
+      };
+    }
   }
   const env = getGraphConfig();
-  if (env) return { configured: true, mailbox: env.mailbox, source: "env", consentedAt: null };
-  return { configured: false, mailbox: null, source: null, consentedAt: null };
+  if (env)
+    return { configured: true, mailbox: env.mailbox, mode: "env", consentedAt: null, connectedUserEmail: null, connectedUserName: null, connectedAt: null };
+  return { configured: false, mailbox: null, mode: null, consentedAt: null, connectedUserEmail: null, connectedUserName: null, connectedAt: null };
 }
 
 export interface IncomingAttachment {
@@ -162,6 +213,100 @@ async function getAccessToken(cfg: GraphConfig): Promise<string> {
   return json.access_token;
 }
 
+const tokenEndpoint = (tenantId: string) =>
+  `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
+// Acquire an access token for the org: delegated (refresh-token) if the admin
+// signed in, otherwise app-only (client credentials). Rotated refresh tokens
+// are persisted.
+async function acquireAccessToken(orgId: string, cfg: GraphConfig): Promise<string> {
+  const s = await getStoredConfig(orgId);
+  if (s?.refreshToken && s.tenantId && s.clientId && s.clientSecret) {
+    const res = await fetch(tokenEndpoint(s.tenantId), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: s.clientId,
+        client_secret: s.clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: s.refreshToken,
+        scope: DELEGATED_SCOPES,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Graph refresh failed: ${res.status} ${await res.text()}`);
+    }
+    const json = (await res.json()) as { access_token: string; refresh_token?: string };
+    if (json.refresh_token && json.refresh_token !== s.refreshToken) {
+      await patchStoredConfig(orgId, { refreshToken: json.refresh_token });
+    }
+    return json.access_token;
+  }
+  return getAccessToken(cfg);
+}
+
+// Exchange an authorization code (delegated sign-in) for tokens, fetch the
+// signed-in user, and persist the connection on the org.
+export async function completeDelegatedSignin(
+  orgId: string,
+  code: string,
+  redirectUri: string,
+): Promise<{ email: string | null; name: string | null }> {
+  const s = await getStoredConfig(orgId);
+  if (!s?.tenantId || !s.clientId || !s.clientSecret) {
+    throw new Error("Save tenant, client ID and secret first.");
+  }
+  const res = await fetch(tokenEndpoint(s.tenantId), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: s.clientId,
+      client_secret: s.clientSecret,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+      scope: DELEGATED_SCOPES,
+    }),
+  });
+  if (!res.ok) throw new Error(`Token exchange failed: ${res.status} ${await res.text()}`);
+  const json = (await res.json()) as { access_token: string; refresh_token?: string };
+  if (!json.refresh_token) throw new Error("No refresh token returned (offline_access scope missing?).");
+
+  // Who signed in?
+  let email: string | null = null;
+  let name: string | null = null;
+  try {
+    const me = await fetch("https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName", {
+      headers: { Authorization: `Bearer ${json.access_token}` },
+    });
+    if (me.ok) {
+      const u = (await me.json()) as { displayName?: string; mail?: string; userPrincipalName?: string };
+      email = u.mail || u.userPrincipalName || null;
+      name = u.displayName || null;
+    }
+  } catch {
+    /* ignore profile fetch errors */
+  }
+
+  await patchStoredConfig(orgId, {
+    refreshToken: json.refresh_token,
+    connectedUserEmail: email,
+    connectedUserName: name,
+    connectedAt: new Date().toISOString(),
+  });
+  return { email, name };
+}
+
+// Clear the delegated connection (keeps the app credentials).
+export async function disconnectDelegated(orgId: string): Promise<void> {
+  await patchStoredConfig(orgId, {
+    refreshToken: null,
+    connectedUserEmail: null,
+    connectedUserName: null,
+    connectedAt: null,
+  });
+}
+
 interface GraphMessage {
   id: string;
   conversationId?: string;
@@ -211,7 +356,7 @@ async function fetchAttachments(
 export async function fetchInbox(orgId: string, limit = 25): Promise<IncomingMessage[]> {
   const cfg = await loadGraphConfig(orgId);
   if (!cfg) return [];
-  const token = await getAccessToken(cfg);
+  const token = await acquireAccessToken(orgId, cfg);
   const url =
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(cfg.mailbox)}/messages` +
     `?$top=${limit}&$orderby=receivedDateTime desc` +
@@ -250,7 +395,7 @@ export async function testConnection(
   const cfg = await loadGraphConfig(orgId);
   if (!cfg) return { ok: false, error: "No connection configured." };
   try {
-    const token = await getAccessToken(cfg);
+    const token = await acquireAccessToken(orgId, cfg);
     const res = await fetch(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(cfg.mailbox)}/messages?$top=1&$select=id`,
       { headers: { Authorization: `Bearer ${token}` } },
@@ -284,7 +429,7 @@ export async function sendMail(input: SendMessageInput, orgId: string): Promise<
     );
     return { sent: false };
   }
-  const token = await getAccessToken(cfg);
+  const token = await acquireAccessToken(orgId, cfg);
   const res = await fetch(
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(cfg.mailbox)}/sendMail`,
     {

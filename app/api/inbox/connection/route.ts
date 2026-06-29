@@ -2,7 +2,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { ok, parseBody, route } from "@/lib/api";
 import { requireOrg, requireOrgPermission } from "@/lib/tenant";
-import { MS_GRAPH_SETTING_KEY, getStoredConfig, connectionStatus } from "@/lib/mail/graph";
+import {
+  MS_GRAPH_SETTING_KEY,
+  getStoredConfig,
+  connectionStatus,
+  disconnectDelegated,
+} from "@/lib/mail/graph";
 
 // Current Microsoft 365 connection (never returns the client secret).
 export const GET = route(async () => {
@@ -16,8 +21,18 @@ export const GET = route(async () => {
     hasSecret: Boolean(s?.clientSecret),
     consentedAt: s?.consentedAt ?? null,
     configured: status.configured,
-    source: status.source,
+    mode: status.mode,
+    connectedUserEmail: status.connectedUserEmail,
+    connectedUserName: status.connectedUserName,
+    connectedAt: status.connectedAt,
   });
+});
+
+// Disconnect the delegated (admin) sign-in; keeps the app credentials.
+export const DELETE = route(async () => {
+  const { orgId } = await requireOrgPermission("MANAGE_CONFIG");
+  await disconnectDelegated(orgId);
+  return ok({ disconnected: true });
 });
 
 const schema = z.object({
